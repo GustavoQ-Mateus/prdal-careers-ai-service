@@ -1,0 +1,64 @@
+from typing import Any
+
+from .llm import LLMUnavailable, complete_model
+from .schemas import GenerateCvRequest, GenerateCvResponse, PerfilMestre
+
+SYSTEM = (
+    "Voce escreve curriculos em Markdown otimizados para ATS. Use apenas fatos "
+    "do perfil-mestre fornecido, nunca invente experiencias. Espelhe as "
+    "palavras-chave da vaga quando forem verdadeiras para o candidato. Estrutura "
+    "com secoes Resumo, Experiencia, Formacao, Skills e Contato. Responda em JSON."
+)
+
+
+def _user(req: GenerateCvRequest) -> str:
+    termos = ", ".join(k.termo for k in req.keywords)
+    return (
+        "Gere o Markdown do curriculo e devolva JSON no formato "
+        '{"markdown":"..."}.\n\n'
+        f"Perfil-mestre:\n{req.perfil_mestre.model_dump_json()}\n\n"
+        f"Vaga: {req.vaga.titulo} @ {req.vaga.empresa}\n"
+        f"Descricao da vaga:\n{req.vaga.descricao}\n\n"
+        f"Palavras-chave a priorizar: {termos}\n\n"
+        f"Contexto adicional:\n{chr(10).join(req.contexto)}"
+    )
+
+
+def _linha_contato(contato: dict[str, Any]) -> str:
+    partes = [str(v) for v in contato.values() if v]
+    return " | ".join(partes)
+
+
+def _item(entry: Any) -> str:
+    if isinstance(entry, dict):
+        partes = [str(v) for v in entry.values() if v]
+        return " - ".join(partes)
+    return str(entry)
+
+
+def _deterministic(perfil: PerfilMestre) -> str:
+    linhas = [f"# {perfil.nome}".strip()]
+    contato = _linha_contato(perfil.contato)
+    if contato:
+        linhas.append(contato)
+    if perfil.resumo:
+        linhas += ["", "## Resumo", perfil.resumo]
+    if perfil.experiencias:
+        linhas += ["", "## Experiencia"]
+        linhas += [f"- {_item(e)}" for e in perfil.experiencias]
+    if perfil.formacao:
+        linhas += ["", "## Formacao"]
+        linhas += [f"- {_item(f)}" for f in perfil.formacao]
+    if perfil.skills:
+        linhas += ["", "## Skills", ", ".join(_item(s) for s in perfil.skills)]
+    return "\n".join(linhas).strip() or "# Curriculo"
+
+
+def generate_cv(req: GenerateCvRequest) -> str:
+    try:
+        res = complete_model(SYSTEM, _user(req), GenerateCvResponse)
+        if res.markdown.strip():
+            return res.markdown
+    except LLMUnavailable:
+        pass
+    return _deterministic(req.perfil_mestre)

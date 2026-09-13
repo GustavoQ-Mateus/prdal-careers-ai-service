@@ -4,6 +4,18 @@ import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from .generate import generate_cv
+from .keywords import extract_keywords
+from .schemas import (
+    GenerateCvRequest,
+    GenerateCvResponse,
+    KeywordsRequest,
+    KeywordsResponse,
+    ScoreRequest,
+    ScoreResponse,
+)
+from .score import calcular_score
+
 DOC_SERVICE_URL = os.getenv("DOC_SERVICE_URL", "http://localhost:8080")
 
 app = FastAPI(title="ai-service")
@@ -42,3 +54,18 @@ async def hello() -> HelloResponse:
         message=hop.message,
         chain=[hop, *downstream.chain],
     )
+
+
+@app.post("/keywords", response_model=KeywordsResponse)
+def keywords(req: KeywordsRequest) -> KeywordsResponse:
+    return KeywordsResponse(keywords=extract_keywords(req.descricao))
+
+
+@app.post("/generate-cv", response_model=GenerateCvResponse)
+def generate(req: GenerateCvRequest) -> GenerateCvResponse:
+    return GenerateCvResponse(markdown=generate_cv(req))
+
+
+@app.post("/score", response_model=ScoreResponse)
+def score(req: ScoreRequest) -> ScoreResponse:
+    return calcular_score(req.markdown, req.vaga.keywords)
