@@ -63,3 +63,13 @@ class ScoreBreakdown(CamelModel):
 class ScoreResponse(CamelModel):
     score: int
     breakdown: ScoreBreakdown
+
+
+class ClassifyRequest(CamelModel):
+    titulo: str = ""
+    descricao: str = ""
+
+
+class ClassifyResponse(CamelModel):
+    categoria: str
+    nivel: str

@@ -4,9 +4,12 @@ import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from .classify import classificar
 from .generate import generate_cv
 from .keywords import extract_keywords
 from .schemas import (
+    ClassifyRequest,
+    ClassifyResponse,
     GenerateCvRequest,
     GenerateCvResponse,
     KeywordsRequest,
@@ -69,3 +72,8 @@ def generate(req: GenerateCvRequest) -> GenerateCvResponse:
 @app.post("/score", response_model=ScoreResponse)
 def score(req: ScoreRequest) -> ScoreResponse:
     return calcular_score(req.markdown, req.vaga.keywords)
+
+
+@app.post("/classify", response_model=ClassifyResponse)
+def classify(req: ClassifyRequest) -> ClassifyResponse:
+    return classificar(req.titulo, req.descricao)
