@@ -7,13 +7,18 @@ from pydantic import BaseModel
 from .classify import classificar
 from .generate import generate_cv
 from .keywords import extract_keywords
+from .rag import consultar, indexar
 from .schemas import (
     ClassifyRequest,
     ClassifyResponse,
     GenerateCvRequest,
     GenerateCvResponse,
+    IngestRequest,
+    IngestResponse,
     KeywordsRequest,
     KeywordsResponse,
+    QueryRequest,
+    QueryResponse,
     ScoreRequest,
     ScoreResponse,
 )
@@ -38,6 +43,13 @@ class HelloResponse(BaseModel):
     service: str
     message: str
     chain: list[HelloHop]
+
+
+@app.on_event("startup")
+def _warmup() -> None:
+    from .rag import _model
+
+    _model()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -77,3 +89,13 @@ def score(req: ScoreRequest) -> ScoreResponse:
 @app.post("/classify", response_model=ClassifyResponse)
 def classify(req: ClassifyRequest) -> ClassifyResponse:
     return classificar(req.titulo, req.descricao)
+
+
+@app.post("/context/ingest", response_model=IngestResponse)
+def context_ingest(req: IngestRequest) -> IngestResponse:
+    return indexar(req.documentos)
+
+
+@app.post("/context/query", response_model=QueryResponse)
+def context_query(req: QueryRequest) -> QueryResponse:
+    return consultar(req.usuario_id, req.query, req.k)

@@ -73,3 +73,35 @@ class ClassifyRequest(CamelModel):
 class ClassifyResponse(CamelModel):
     categoria: str
     nivel: str
+
+
+class Documento(CamelModel):
+    usuario_id: str
+    origem: str
+    origem_id: str
+    titulo: str = ""
+    texto: str
+
+
+class IngestRequest(CamelModel):
+    documentos: list[Documento]
+
+
+class IngestResponse(CamelModel):
+    indexados: int
+
+
+class QueryRequest(CamelModel):
+    usuario_id: str
+    query: str
+    k: int = 5
+
+
+class Chunk(CamelModel):
+    texto: str
+    origem: str
+    titulo: str
+
+
+class QueryResponse(CamelModel):
+    chunks: list[Chunk]
