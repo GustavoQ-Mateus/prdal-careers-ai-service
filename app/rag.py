@@ -1,8 +1,6 @@
 import os
 from functools import lru_cache
 
-import chromadb
-
 from .schemas import Chunk, Documento, IngestResponse, QueryResponse
 
 MODEL_NAME = os.getenv("EMBED_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
@@ -25,6 +23,8 @@ def _model():
 
 @lru_cache(maxsize=1)
 def _collection():
+    import chromadb
+
     client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
     return client.get_or_create_collection(COLLECTION)
 

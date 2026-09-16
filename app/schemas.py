@@ -105,3 +105,59 @@ class Chunk(CamelModel):
 
 class QueryResponse(CamelModel):
     chunks: list[Chunk]
+
+
+class MensagemTurno(CamelModel):
+    papel: str
+    conteudo: str
+    tool: str | None = None
+
+
+class ToolSpec(CamelModel):
+    nome: str
+    efeito: str
+    descricao: str = ""
+    parametros: dict[str, Any] = {}
+
+
+class TurnRequest(CamelModel):
+    modo: str = "assistido"
+    oportunidade_id: str | None = None
+    mensagens: list[MensagemTurno] = []
+    tools: list[ToolSpec] = []
+
+
+class TurnResponse(CamelModel):
+    tipo: str
+    texto: str | None = None
+    tool: str | None = None
+    args: dict[str, Any] = {}
+
+
+class RedigirMensagemRequest(CamelModel):
+    vaga: Vaga = Vaga()
+    perfil: PerfilMestre = PerfilMestre()
+    contexto: str = ""
+
+
+class RedigirMensagemResponse(CamelModel):
+    titulo: str
+    texto: str
+    destino: str = ""
+
+
+class RespostaFormulario(CamelModel):
+    campo: str
+    texto: str
+
+
+class RedigirFormularioRequest(CamelModel):
+    vaga: Vaga = Vaga()
+    perfil: PerfilMestre = PerfilMestre()
+    campos: list[str] = []
+
+
+class RedigirFormularioResponse(CamelModel):
+    titulo: str
+    respostas: list[RespostaFormulario] = []
+    texto: str

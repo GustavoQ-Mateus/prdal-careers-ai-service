@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from .classify import classificar
+from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
 from .generate import generate_cv
 from .keywords import extract_keywords
 from .rag import consultar, indexar
@@ -19,8 +20,14 @@ from .schemas import (
     KeywordsResponse,
     QueryRequest,
     QueryResponse,
+    RedigirFormularioRequest,
+    RedigirFormularioResponse,
+    RedigirMensagemRequest,
+    RedigirMensagemResponse,
     ScoreRequest,
     ScoreResponse,
+    TurnRequest,
+    TurnResponse,
 )
 from .score import calcular_score
 
@@ -47,9 +54,12 @@ class HelloResponse(BaseModel):
 
 @app.on_event("startup")
 def _warmup() -> None:
-    from .rag import _model
+    try:
+        from .rag import _model
 
-    _model()
+        _model()
+    except Exception:
+        pass
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -99,3 +109,22 @@ def context_ingest(req: IngestRequest) -> IngestResponse:
 @app.post("/context/query", response_model=QueryResponse)
 def context_query(req: QueryRequest) -> QueryResponse:
     return consultar(req.usuario_id, req.query, req.k)
+
+
+@app.post("/copiloto/turn", response_model=TurnResponse)
+def copiloto_turn(req: TurnRequest) -> TurnResponse:
+    return planejar_turno(req)
+
+
+@app.post("/copiloto/redigir-mensagem", response_model=RedigirMensagemResponse)
+def copiloto_redigir_mensagem(
+    req: RedigirMensagemRequest,
+) -> RedigirMensagemResponse:
+    return redigir_mensagem(req)
+
+
+@app.post("/copiloto/redigir-formulario", response_model=RedigirFormularioResponse)
+def copiloto_redigir_formulario(
+    req: RedigirFormularioRequest,
+) -> RedigirFormularioResponse:
+    return redigir_formulario(req)
