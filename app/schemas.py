@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -26,6 +26,16 @@ class Vaga(CamelModel):
     empresa: str = ""
     descricao: str = ""
     keywords: list[Keyword] = []
+
+    @field_validator("keywords", mode="before")
+    @classmethod
+    def _normalizar_keywords(cls, valor: Any) -> Any:
+        if not isinstance(valor, list):
+            return valor
+        return [
+            {"termo": item, "peso": 0.0} if isinstance(item, str) else item
+            for item in valor
+        ]
 
 
 class PerfilMestre(CamelModel):
