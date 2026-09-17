@@ -69,6 +69,22 @@ class GenerateCvResponse(CamelModel):
     markdown: str
 
 
+class AtsAnalysis(CamelModel):
+    score: int
+    keywords_encontradas: list[str] = []
+    keywords_criticas_ausentes: list[str] = []
+    pontos_eliminatorios: list[str] = []
+    veredicto: str
+    breakdown: dict[str, Any] = {}
+
+
+class GeneratePipelineResponse(CamelModel):
+    markdown: str
+    analise_inicial: AtsAnalysis
+    analise_final: AtsAnalysis
+    degradacao: str | None = None
+
+
 class ScoreRequest(CamelModel):
     markdown: str
     vaga: Vaga

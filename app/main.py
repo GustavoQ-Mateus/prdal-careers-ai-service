@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
-from .generate import generate_cv
+from .generate import generate_cv, generate_cv_pipeline
 from .keywords import extract_keywords
 from .rag import consultar, indexar
 from .schemas import (
@@ -14,6 +14,7 @@ from .schemas import (
     ClassifyResponse,
     GenerateCvRequest,
     GenerateCvResponse,
+    GeneratePipelineResponse,
     IngestRequest,
     IngestResponse,
     KeywordsRequest,
@@ -90,6 +91,11 @@ def keywords(req: KeywordsRequest) -> KeywordsResponse:
 @app.post("/generate-cv", response_model=GenerateCvResponse)
 def generate(req: GenerateCvRequest) -> GenerateCvResponse:
     return GenerateCvResponse(markdown=generate_cv(req))
+
+
+@app.post("/generate-cv-pipeline", response_model=GeneratePipelineResponse)
+def generate_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
+    return generate_cv_pipeline(req)
 
 
 @app.post("/score", response_model=ScoreResponse)

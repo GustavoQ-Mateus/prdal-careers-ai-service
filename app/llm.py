@@ -17,21 +17,18 @@ def _provider() -> str:
 
 
 def _client_and_model() -> tuple[OpenAI, str]:
-    if _provider() == "ollama":
-        base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-        return OpenAI(base_url=f"{base}/v1", api_key="ollama"), os.getenv(
-            "AI_MODEL", "llama3.1"
-        )
     return OpenAI(
         base_url="https://api.groq.com/openai/v1",
         api_key=os.getenv("GROQ_API_KEY", ""),
-    ), os.getenv("AI_MODEL", "llama-3.1-8b-instant")
+    ), os.getenv("AI_MODEL", "openai/gpt-oss-20b")
 
 
 def complete_model(
     system: str, user: str, schema: type[T], retries: int = 2
 ) -> T:
-    if _provider() == "groq" and not os.getenv("GROQ_API_KEY"):
+    if _provider() != "groq":
+        raise LLMUnavailable("somente Groq esta habilitado para geracao")
+    if not os.getenv("GROQ_API_KEY"):
         raise LLMUnavailable("GROQ_API_KEY ausente")
 
     client, model = _client_and_model()
