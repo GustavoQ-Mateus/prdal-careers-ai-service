@@ -4,7 +4,7 @@ import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from .classify import classificar
+from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
 from .generate import generate_cv
 from .keywords import extract_keywords
@@ -26,6 +26,7 @@ from .schemas import (
     RedigirMensagemResponse,
     ScoreRequest,
     ScoreResponse,
+    TaxonomiaResponse,
     TurnRequest,
     TurnResponse,
 )
@@ -99,6 +100,11 @@ def score(req: ScoreRequest) -> ScoreResponse:
 @app.post("/classify", response_model=ClassifyResponse)
 def classify(req: ClassifyRequest) -> ClassifyResponse:
     return classificar(req.titulo, req.descricao)
+
+
+@app.get("/classify/taxonomy", response_model=TaxonomiaResponse)
+def classify_taxonomy() -> TaxonomiaResponse:
+    return TaxonomiaResponse(**taxonomia())
 
 
 @app.post("/context/ingest", response_model=IngestResponse)

@@ -65,6 +65,9 @@ NIVEL_SINAIS: list[tuple[str, tuple[str, ...]]] = [
     ("junior", ("junior", "trainee", "entry level", "entry-level", "jr")),
 ]
 
+CATEGORIAS = [*ORDEM_DESEMPATE, "fullstack", "outro"]
+NIVEIS = ["estagio", "junior", "pleno", "senior", "indefinido"]
+
 
 def _casa(termo: str, texto_norm: str, tokset: set[str]) -> bool:
     if termo.isalnum():
@@ -108,3 +111,7 @@ def classificar(titulo: str, descricao: str) -> ClassifyResponse:
         categoria=_categoria(texto_norm, tokset),
         nivel=_nivel(texto_norm, tokset),
     )
+
+
+def taxonomia() -> dict[str, list[str]]:
+    return {"categorias": list(CATEGORIAS), "niveis": list(NIVEIS)}

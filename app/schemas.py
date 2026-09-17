@@ -85,6 +85,11 @@ class ClassifyResponse(CamelModel):
     nivel: str
 
 
+class TaxonomiaResponse(CamelModel):
+    categorias: list[str] = []
+    niveis: list[str] = []
+
+
 class Documento(CamelModel):
     usuario_id: str
     origem: str
