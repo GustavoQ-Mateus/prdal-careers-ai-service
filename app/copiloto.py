@@ -102,8 +102,14 @@ SYSTEM_MENSAGEM = (
 
 def _perfil_txt(perfil: PerfilMestre) -> str:
     partes = [perfil.nome, perfil.resumo]
+    if perfil.contato:
+        partes.append("Contato: " + " | ".join(perfil.contato.values()))
+    if perfil.experiencias:
+        experiencias = "\n\n".join(experiencia.texto for experiencia in perfil.experiencias if experiencia.texto)
+        if experiencias:
+            partes.append("Experiências:\n" + experiencias)
     if perfil.skills:
-        partes.append("Skills: " + ", ".join(str(s) for s in perfil.skills))
+        partes.append("Skills: " + ", ".join(perfil.skills))
     return "\n".join(p for p in partes if p)
 
 

@@ -1,7 +1,7 @@
 from typing import Any
 
 from .llm import LLMUnavailable, complete_model
-from .schemas import GenerateCvRequest, GenerateCvResponse, PerfilMestre
+from .schemas import ExperienciaPerfil, GenerateCvRequest, GenerateCvResponse, PerfilMestre
 
 SYSTEM = (
     "Voce escreve curriculos em Markdown otimizados para ATS. Use apenas fatos "
@@ -29,11 +29,26 @@ def _linha_contato(contato: dict[str, Any]) -> str:
     return " | ".join(partes)
 
 
-def _item(entry: Any) -> str:
-    if isinstance(entry, dict):
-        partes = [str(v) for v in entry.values() if v]
-        return " - ".join(partes)
-    return str(entry)
+def _texto_experiencia(experiencia: ExperienciaPerfil) -> str:
+    if experiencia.texto:
+        return experiencia.texto
+    partes = [
+        f"Cargo: {experiencia.cargo}" if experiencia.cargo else "",
+        f"Empresa: {experiencia.empresa}" if experiencia.empresa else "",
+        f"Período: {experiencia.periodo}" if experiencia.periodo else "",
+        f"Local: {experiencia.local}" if experiencia.local else "",
+        f"Descrição: {experiencia.descricao}" if experiencia.descricao else "",
+        f"Tecnologias e competências: {', '.join(experiencia.tecnologias)}"
+        if experiencia.tecnologias
+        else "",
+    ]
+    return "\n".join(parte for parte in partes if parte)
+
+
+def _titulo_experiencia(experiencia: ExperienciaPerfil) -> str:
+    if experiencia.cargo and experiencia.empresa:
+        return f"{experiencia.cargo} na {experiencia.empresa}"
+    return experiencia.cargo or experiencia.empresa or "Experiência"
 
 
 def _deterministic(perfil: PerfilMestre) -> str:
@@ -45,12 +60,14 @@ def _deterministic(perfil: PerfilMestre) -> str:
         linhas += ["", "## Resumo", perfil.resumo]
     if perfil.experiencias:
         linhas += ["", "## Experiencia"]
-        linhas += [f"- {_item(e)}" for e in perfil.experiencias]
+        for experiencia in perfil.experiencias:
+            texto = _texto_experiencia(experiencia)
+            if texto:
+                linhas += ["", f"### {_titulo_experiencia(experiencia)}", texto]
     if perfil.formacao:
-        linhas += ["", "## Formacao"]
-        linhas += [f"- {_item(f)}" for f in perfil.formacao]
+        linhas += ["", "## Formacao", *[f"- {formacao}" for formacao in perfil.formacao]]
     if perfil.skills:
-        linhas += ["", "## Skills", ", ".join(_item(s) for s in perfil.skills)]
+        linhas += ["", "## Skills", ", ".join(perfil.skills)]
     return "\n".join(linhas).strip() or "# Curriculo"
 
 

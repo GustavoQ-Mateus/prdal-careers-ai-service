@@ -38,13 +38,24 @@ class Vaga(CamelModel):
         ]
 
 
+class ExperienciaPerfil(CamelModel):
+    id: str = ""
+    cargo: str = ""
+    empresa: str = ""
+    periodo: str = ""
+    local: str = ""
+    descricao: str = ""
+    tecnologias: list[str] = []
+    texto: str = ""
+
+
 class PerfilMestre(CamelModel):
     nome: str = ""
     contato: dict[str, Any] = {}
     resumo: str = ""
-    experiencias: list[Any] = []
-    formacao: list[Any] = []
-    skills: list[Any] = []
+    experiencias: list[ExperienciaPerfil] = []
+    formacao: list[str] = []
+    skills: list[str] = []
 
 
 class GenerateCvRequest(CamelModel):
