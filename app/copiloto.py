@@ -43,13 +43,47 @@ SYSTEM_TURNO = (
     "somente para criar uma acao de agenda. "
     "Curriculos devem preservar fatos verdadeiros, experiencias densas, autoria de "
     "time quando aplicavel, bullets com verbo de acao, keywords honestas e pagina "
-    "unica quando possivel. Fale em portugues, no escopo do candidato. "
+    "unica quando possivel. Se o candidato disser que atualizou o perfil ou as "
+    "competencias e quer tentar novamente para a oportunidade em foco, leia o "
+    "perfil e gere uma nova versao a partir dele. Nao peca Markdown nem escolha "
+    "edicao de curriculo nesse caso. No texto visivel ao candidato, use apenas "
+    "linguagem de produto. Nunca cite identificadores de ferramentas, rotas, "
+    "payloads, JSON ou instrucoes internas. Fale em portugues, no escopo do "
+    "candidato. "
     "Responda SEMPRE em JSON no formato "
     '{"tipo":"texto"|"tool_call","texto":"...","tool":"...","args":{...}}. '
     "Use tipo texto quando for so conversar e tipo tool_call quando acionar uma tool."
 )
 
 _DIRETIVA = re.compile(r"^\s*tool\s+([a-z_]+)\s*(\{.*\})?\s*$", re.IGNORECASE | re.DOTALL)
+_DETALHE_INTERNO = re.compile(
+    r"\b(?:[a-z]+_)+[a-z]+\b|\b(?:GET|POST|PUT|PATCH)\s+/\S+|\b(?:payload|json|tool|tools|rota)\b",
+    re.IGNORECASE,
+)
+
+
+def _regerar_por_perfil_atualizado(req: TurnRequest) -> TurnResponse | None:
+    if not req.oportunidade_id or not req.mensagens:
+        return None
+    ultimas_mensagens = [m.conteudo.lower() for m in req.mensagens if m.papel == "user"][-2:]
+    contexto = " ".join(ultimas_mensagens)
+    atualizou = any(termo in contexto for termo in ("atualiz", "adicionei", "inclui", "coloquei"))
+    perfil = "perfil" in contexto or "competenc" in contexto
+    tentar = any(termo in contexto for termo in ("tente", "novamente", "nova versao", "reger"))
+    if not (atualizou and perfil and tentar):
+        return None
+    ultima = req.mensagens[-1]
+    if ultima.papel == "tool" and ultima.tool == "ler_perfil":
+        return TurnResponse(
+            tipo="tool_call",
+            tool="gerar_curriculo",
+            args={"oportunidadeId": req.oportunidade_id},
+        )
+    return TurnResponse(tipo="tool_call", tool="ler_perfil")
+
+
+def _texto_para_candidato(texto: str) -> str:
+    return _DETALHE_INTERNO.sub("esta acao", texto)
 
 
 def _catalogo(req: TurnRequest) -> str:
@@ -100,19 +134,23 @@ def _fallback(req: TurnRequest) -> TurnResponse:
         return TurnResponse(
             tipo="texto",
             texto=(
-                "Modelo indisponivel para raciocinar. Posso seguir com passos "
-                "explicitos: envie tool <nome> com os argumentos."
+                "O copiloto esta indisponivel no momento. Tente novamente em instantes."
             ),
         )
     return TurnResponse(tipo="texto", texto="Etapa concluida.")
 
 
 def planejar_turno(req: TurnRequest) -> TurnResponse:
+    regeracao = _regerar_por_perfil_atualizado(req)
+    if regeracao:
+        return regeracao
     try:
         res = complete_model(SYSTEM_TURNO, _user(req), TurnResponse)
         if res.tipo in ("texto", "tool_call"):
             if res.tipo == "tool_call" and not res.tool:
-                return TurnResponse(tipo="texto", texto=res.texto or "")
+                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or ""))
+            if res.tipo == "texto":
+                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or ""))
             return res
     except LLMUnavailable:
         pass
