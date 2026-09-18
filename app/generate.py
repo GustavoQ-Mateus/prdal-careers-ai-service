@@ -81,6 +81,8 @@ def _user(
     lacunas_texto = ", ".join(lacunas) if lacunas else "nenhuma lacuna factual autorizada"
     reparos = "\n".join(f"- {erro}" for erro in (erros or [])) or "- nenhum"
     titulo_seguro = _titulo_vaga_seguro(req.vaga.titulo, req)
+    h = _cabecalhos(_idioma(req))
+    secoes_obrigatorias = " -> ".join(f"## {secao}" for secao in h.values())
     return (
         "Gere um curriculo tailored e devolva JSON exatamente no formato "
         '{"markdown":"..."}.\n\n'
@@ -97,8 +99,9 @@ def _user(
         "Depois, uma unica linha de contato no corpo. Nome e titulo nunca ficam na "
         "mesma linha.\n"
         f"- Use como titulo profissional '{titulo_seguro}', sem nome da empresa.\n"
-        "- Secoes nesta ordem e no idioma da vaga: resumo profissional, competencias, "
-        "experiencia profissional, formacao academica, certificacoes e idiomas.\n"
+        "- Secoes exatamente nesta ordem e com estes titulos literais: "
+        f"{secoes_obrigatorias}. Nao traduza, nao use sinonimos e nao troque "
+        "para espanhol/ingles quando a vaga estiver em portugues.\n"
         "- Competencias logo apos o resumo, em linhas '- Categoria: valor, valor'.\n"
         "- Cada experiencia usa '**Empresa** | Cargo | MM/AAAA - MM/AAAA' e depois "
         "bullets finais. Nunca use labels Cargo, Empresa, Periodo, Descricao ou "
@@ -263,10 +266,13 @@ def _texto_perfil(perfil: PerfilMestre) -> str:
 def _idioma(req: GenerateCvRequest) -> str:
     texto = normalize(f"{req.vaga.titulo} {req.vaga.descricao}")
     en = ["requirements", "responsibilities", "experience", "english", "skills", "we are", "hiring"]
-    es = ["requisitos", "responsabilidades", "experiencia", "espanol", "habilidades"]
+    es = [
+        "espanol", "desarrollador", "desarrolladora", "conocimientos",
+        "habilidades", "formacion", "trabajo remoto", "postulate",
+    ]
     if sum(t in texto for t in en) >= 2:
         return "en"
-    if "español" in req.vaga.descricao.lower() or sum(t in texto for t in es) >= 3:
+    if "español" in req.vaga.descricao.lower() or sum(t in texto for t in es) >= 2:
         return "es"
     return "pt"
 
