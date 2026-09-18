@@ -1,4 +1,6 @@
 import re
+import unicodedata
+from pathlib import Path
 from typing import Any
 
 from .llm import LLMUnavailable, complete_model
@@ -13,70 +15,254 @@ from .schemas import (
 from .score import calcular_score
 from .text import normalize
 
-SYSTEM = (
-    "Voce reescreve curriculos ATS em Markdown. Use somente fatos presentes no "
-    "perfil-mestre e no contexto RAG fornecidos. Nunca invente metricas, datas, "
-    "empresas, contatos, tecnologias ou autoria individual. Responda em JSON."
+JOB_HEADER_RE = re.compile(r"^\*\*(.+?)\*\*\s*\|\s*(.+?)\s*\|\s*(.+?)\s*$")
+SKILL_RE = re.compile(r"^-\s*([^:]+):\s*(.+)$")
+BULLET_RE = re.compile(r"^-\s+(.+)$")
+
+
+def _repo_root() -> Path:
+    atual = Path(__file__).resolve()
+    for path in [Path.cwd(), *atual.parents]:
+        if (path / ".claude" / "agents").exists():
+            return path
+    return Path.cwd()
+
+
+REPO_ROOT = _repo_root()
+SPEC_CANDIDATES = [
+    Path.cwd() / ".claude" / "agents" / "modo-pipeline-curriculo.md",
+    REPO_ROOT / ".claude" / "agents" / "modo-pipeline-curriculo.md",
+]
+
+TECH_CATALOG = (
+    "django", "next.js", "nextjs", "kafka", "laravel", "vue", "ruby", "rails",
+    "php", "go", "golang", "flask", "graphql", "kotlin", "swift", "oracle",
+    "elasticsearch", "fastapi", "spring boot", "nestjs", "react", "angular",
+    "postgresql", "mysql", "mongodb", "redis", "aws", "azure", "gcp",
+    "terraform", "docker", "kubernetes", "c#", ".net", "rag", "llm", "yolo",
+    "opencv", "celery", "sqs", "lambda", "aurora", "cloudfront", "whatsapp",
+    "ocr", "paddleocr", "tesseract", "three.js", "leaflet", "vite",
 )
 
 
-def _user(req: GenerateCvRequest) -> str:
-    termos = ", ".join(k.termo for k in req.keywords)
+def _read_spec() -> str:
+    for path in SPEC_CANDIDATES:
+        if path.exists():
+            return path.read_text(encoding="utf-8")
     return (
-        "Gere o Markdown do curriculo e devolva JSON no formato "
+        "Modo Pipeline de Curriculo: Etapa 1 analise ATS; Etapa 2 reescrita "
+        "otimizada; Etapa 3 score pos-geracao. Manter apenas fatos verdadeiros."
+    )
+
+
+def _system_prompt() -> str:
+    return (
+        "Voce e o motor do modo-pipeline-curriculo. Responda somente em JSON.\n\n"
+        "Metodologia versionada do modo:\n"
+        f"{_read_spec()}\n\n"
+        "Regra de ouro multiusuario: use somente fatos presentes no perfil-mestre "
+        "e no contexto factual deste request. Uma tecnologia da vaga so pode "
+        "entrar no CV se existir nesses dados do usuario autenticado."
+    )
+
+
+def _json_model(model: Any) -> str:
+    return model.model_dump_json(by_alias=True) if hasattr(model, "model_dump_json") else str(model)
+
+
+def _user(
+    req: GenerateCvRequest,
+    analise_inicial: AtsAnalysis,
+    lacunas: list[str],
+    markdown_atual: str | None = None,
+    erros: list[str] | None = None,
+) -> str:
+    termos = ", ".join(k.termo for k in req.keywords)
+    lacunas_texto = ", ".join(lacunas) if lacunas else "nenhuma lacuna factual autorizada"
+    reparos = "\n".join(f"- {erro}" for erro in (erros or [])) or "- nenhum"
+    titulo_seguro = _titulo_vaga_seguro(req.vaga.titulo, req)
+    return (
+        "Gere um curriculo tailored e devolva JSON exatamente no formato "
         '{"markdown":"..."}.\n\n'
-        "Regras obrigatorias:\n"
-        "- Processar uma vaga por vez e escrever no idioma da vaga.\n"
-        "- Estrutura limpa: nome e titulo, contato, resumo profissional, "
-        "competencias, experiencia profissional, formacao, certificacoes e idiomas.\n"
-        "- Sem tabelas, colunas, icones, travessao, parenteses decorativos ou "
-        "keyword stuffing.\n"
-        "- Datas em MM/AAAA quando existirem no perfil.\n"
-        "- Titulo alinhado a vaga e espelhamento honesto dos termos exatos da vaga.\n"
-        "- Cada bullet inicia com verbo de acao e combina contexto, tecnologia e "
-        "impacto real.\n"
-        "- Nao misture experiencias, nao transforme contribuicao de time em autoria "
-        "individual e nao invente fatos ausentes.\n\n"
+        "Etapa 1 ja executada. Use a analise inicial abaixo como entrada da "
+        "reescrita, nao a descarte:\n"
+        f"{_json_model(analise_inicial)}\n\n"
+        "Lacunas criticas que devem ser fechadas se couberem organicamente, usando "
+        "os termos exatos da vaga e somente quando sustentadas pela fonte factual:\n"
+        f"{lacunas_texto}\n"
+        "Meta: overlap de vocabulario com a vaga >= 60%, sem keyword stuffing e "
+        "sem secao 'palavras-chave'.\n\n"
+        "Contrato obrigatorio do Markdown:\n"
+        "- Primeira linha: '# NOME'. Segunda linha util: '**Titulo profissional**'. "
+        "Depois, uma unica linha de contato no corpo. Nome e titulo nunca ficam na "
+        "mesma linha.\n"
+        f"- Use como titulo profissional '{titulo_seguro}', sem nome da empresa.\n"
+        "- Secoes nesta ordem e no idioma da vaga: resumo profissional, competencias, "
+        "experiencia profissional, formacao academica, certificacoes e idiomas.\n"
+        "- Competencias logo apos o resumo, em linhas '- Categoria: valor, valor'.\n"
+        "- Cada experiencia usa '**Empresa** | Cargo | MM/AAAA - MM/AAAA' e depois "
+        "bullets finais. Nunca use labels Cargo, Empresa, Periodo, Descricao ou "
+        "Tecnologias dentro da experiencia.\n"
+        "- Cada bullet comeca com verbo de acao e combina contexto, tecnologias "
+        "concretas e impacto real. Experiencias nunca podem ficar cruas ou rasas.\n"
+        "- Preserve a moldura factual: contribuicao de time continua colaborativa; "
+        "autoria forte so quando estiver comprovada na propria experiencia. Nunca "
+        "intensifique o verbo da fonte: Atuei, Contribui ou Participei nao podem "
+        "virar Desenvolvi, Implementei, Liderei ou Construi.\n"
+        "- Espelhe honestamente termos exatos da vaga quando eles existirem no "
+        "historico. Nao use keyword stuffing.\n"
+        "- Sem tabelas, colunas, icones, travessao Unicode ou parenteses decorativos.\n"
+        "- Alvo de uma pagina: use no maximo 3 experiencias e 2 a 4 bullets densos "
+        "por experiencia, priorizando os fatos mais relevantes sem esvaziar a "
+        "substancia tecnica.\n"
+        "- Nao crie conteudo para certificacoes ou idiomas quando o perfil e o "
+        "contexto nao trouxerem esses fatos. Quando existirem, certificacoes usam "
+        "bullets e idiomas ficam em uma linha separada por '|'.\n\n"
+        "- A formula de bullet ATS e obrigatoria: verbo de acao -> o que foi feito "
+        "-> resultado real -> ferramenta por extenso.\n"
+        "- Nao afirme nenhuma tecnologia, empresa, metrica, autoria ou senioridade "
+        "que nao exista no perfil-mestre ou no contexto factual deste request.\n\n"
+        f"Erros a corrigir nesta tentativa:\n{reparos}\n\n"
         f"Perfil-mestre:\n{req.perfil_mestre.model_dump_json()}\n\n"
         f"Vaga: {req.vaga.titulo} @ {req.vaga.empresa}\n"
         f"Descricao da vaga:\n{req.vaga.descricao}\n\n"
         f"Palavras-chave a priorizar: {termos}\n\n"
-        f"Contexto adicional:\n{chr(10).join(req.contexto)}"
+        f"Contexto adicional:\n{chr(10).join(req.contexto)}\n\n"
+        + (f"Markdown atual para reescrever sem perder fatos:\n{markdown_atual}\n" if markdown_atual else "")
     )
 
 
+def _sem_acentos(texto: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn"
+    ).lower()
+
+
+def _contains_norm(texto: str, termo: str) -> bool:
+    return _termo_presente(termo, texto)
+
+
+def _fonte_factual(req: GenerateCvRequest) -> str:
+    return "\n".join(
+        [
+            _texto_perfil(req.perfil_mestre),
+            "\n".join(req.contexto),
+        ]
+    )
+
+
+def _compactar_termo(texto: str) -> str:
+    return re.sub(r"[^a-z0-9#+]+", "", normalize(texto))
+
+
+def _termo_presente(termo: str, texto: str) -> bool:
+    termo_norm = normalize(termo.strip())
+    texto_norm = normalize(texto)
+    if not termo_norm:
+        return False
+    padrao = rf"(?<![a-z0-9]){re.escape(termo_norm)}(?![a-z0-9])"
+    if re.search(padrao, texto_norm):
+        return True
+    compacto = _compactar_termo(termo)
+    return bool(len(compacto) > 2 and compacto in _compactar_termo(texto))
+
+
+def _termo_bloqueado(termo: str, req: GenerateCvRequest) -> bool:
+    return bool(termo.strip()) and not _termo_autorizado(termo, req)
+
+
+def _termo_autorizado(termo: str, req: GenerateCvRequest) -> bool:
+    return _termo_presente(termo, _fonte_factual(req))
+
+
+def _limpar_termos_bloqueados(texto: str, req: GenerateCvRequest) -> str:
+    return texto
+
+
+def _titulo_vaga_seguro(titulo: str, req: GenerateCvRequest | None = None) -> str:
+    limpo = re.sub(r"\s{2,}", " ", titulo).strip(" -/|,+")
+    if req and any(
+        _termo_presente(termo, limpo) and not _termo_autorizado(termo, req)
+        for termo in TECH_CATALOG
+    ):
+        cargo = next((e.cargo for e in req.perfil_mestre.experiencias if e.cargo), "")
+        if cargo:
+            return cargo
+        skill = next((s for s in req.perfil_mestre.skills if s), "")
+        if skill:
+            return f"Profissional de {skill}"
+    return limpo or "Desenvolvedor Full-Stack"
+
+
 def _linha_contato(contato: dict[str, Any]) -> str:
-    partes = [str(v) for v in contato.values() if v]
+    ordem = ["telefone", "email", "localizacao", "cidade", "site", "linkedin", "github"]
+    usados: set[str] = set()
+    partes: list[str] = []
+    for chave in ordem:
+        valor = contato.get(chave)
+        if valor:
+            partes.append(str(valor))
+            usados.add(chave)
+    partes.extend(str(v) for k, v in contato.items() if k not in usados and v)
     return " | ".join(partes)
+
+
+def _realizacoes(experiencia: ExperienciaPerfil) -> list[str]:
+    if experiencia.realizacoes:
+        return [item.strip().lstrip("- ").strip() for item in experiencia.realizacoes if item.strip()]
+    linhas = [linha.strip() for linha in experiencia.descricao.splitlines() if linha.strip()]
+    bullets = [m.group(1).strip() for linha in linhas if (m := BULLET_RE.match(linha))]
+    if bullets:
+        return bullets
+    return [experiencia.descricao.strip()] if experiencia.descricao.strip() else []
+
+
+MESES = {
+    "jan": "01", "janeiro": "01", "january": "01", "enero": "01",
+    "fev": "02", "fevereiro": "02", "feb": "02", "february": "02", "febrero": "02",
+    "mar": "03", "marco": "03", "março": "03", "march": "03", "marzo": "03",
+    "abr": "04", "abril": "04", "apr": "04", "april": "04",
+    "mai": "05", "maio": "05", "may": "05", "mayo": "05",
+    "jun": "06", "junho": "06", "june": "06", "junio": "06",
+    "jul": "07", "julho": "07", "july": "07", "julio": "07",
+    "ago": "08", "agosto": "08", "aug": "08", "august": "08",
+    "set": "09", "setembro": "09", "sep": "09", "september": "09", "septiembre": "09",
+    "out": "10", "outubro": "10", "oct": "10", "october": "10", "octubre": "10",
+    "nov": "11", "novembro": "11", "november": "11", "noviembre": "11",
+    "dez": "12", "dezembro": "12", "dec": "12", "december": "12", "diciembre": "12",
+}
+
+
+def _periodo_mm_aaaa(periodo: str, idioma: str) -> str:
+    atual = {"pt": "atual", "en": "present", "es": "actual"}[idioma]
+    texto = periodo.strip()
+
+    def substituir(match: re.Match[str]) -> str:
+        mes = _sem_acentos(match.group(1)).rstrip(".")
+        return f"{MESES.get(mes, match.group(1))}/{match.group(2)}"
+
+    nomes = "|".join(sorted((re.escape(m) for m in MESES), key=len, reverse=True))
+    texto = re.sub(rf"\b({nomes})\.?\s+(\d{{4}})\b", substituir, texto, flags=re.IGNORECASE)
+    texto = re.sub(
+        r"\s+(?:a|ate|até|to|hasta)\s+(?:atual|present|actual)\b",
+        f" - {atual}", texto, flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s*[–—]\s*", " - ", texto)
 
 
 def _texto_perfil(perfil: PerfilMestre) -> str:
     partes = [
-        perfil.nome,
-        str(perfil.contato),
-        perfil.resumo,
+        perfil.nome, str(perfil.contato), perfil.resumo,
         " ".join(_texto_experiencia(e) for e in perfil.experiencias),
-        " ".join(perfil.formacao),
-        " ".join(perfil.skills),
+        " ".join(perfil.formacao), " ".join(perfil.certificacoes),
+        " ".join(perfil.idiomas), " ".join(perfil.skills),
     ]
     return "\n".join(p for p in partes if p)
 
 
 def _idioma(req: GenerateCvRequest) -> str:
     texto = normalize(f"{req.vaga.titulo} {req.vaga.descricao}")
-    en = [
-        "requirements",
-        "responsibilities",
-        "experience",
-        "english",
-        "skills",
-        "we are",
-        "hiring",
-        "developer",
-        "build",
-        "cloud",
-        "deployment",
-    ]
+    en = ["requirements", "responsibilities", "experience", "english", "skills", "we are", "hiring"]
     es = ["requisitos", "responsabilidades", "experiencia", "espanol", "habilidades"]
     if sum(t in texto for t in en) >= 2:
         return "en"
@@ -88,163 +274,246 @@ def _idioma(req: GenerateCvRequest) -> str:
 def _cabecalhos(idioma: str) -> dict[str, str]:
     if idioma == "en":
         return {
-            "resumo": "PROFESSIONAL SUMMARY",
-            "competencias": "SKILLS",
-            "experiencia": "PROFESSIONAL EXPERIENCE",
-            "formacao": "EDUCATION",
-            "certificacoes": "CERTIFICATIONS",
-            "idiomas": "LANGUAGES",
+            "resumo": "PROFESSIONAL SUMMARY", "competencias": "SKILLS",
+            "experiencia": "PROFESSIONAL EXPERIENCE", "formacao": "EDUCATION",
+            "certificacoes": "CERTIFICATIONS", "idiomas": "LANGUAGES",
         }
     if idioma == "es":
         return {
-            "resumo": "RESUMEN PROFESIONAL",
-            "competencias": "COMPETENCIAS",
-            "experiencia": "EXPERIENCIA PROFESIONAL",
-            "formacao": "FORMACION ACADEMICA",
-            "certificacoes": "CERTIFICACIONES",
-            "idiomas": "IDIOMAS",
+            "resumo": "RESUMEN PROFESIONAL", "competencias": "COMPETENCIAS",
+            "experiencia": "EXPERIENCIA PROFESIONAL", "formacao": "FORMACIÓN ACADÉMICA",
+            "certificacoes": "CERTIFICACIONES", "idiomas": "IDIOMAS",
         }
     return {
-        "resumo": "RESUMO PROFISSIONAL",
-        "competencias": "COMPETENCIAS",
-        "experiencia": "EXPERIENCIA PROFISSIONAL",
-        "formacao": "FORMACAO ACADEMICA",
-        "certificacoes": "CERTIFICACOES",
-        "idiomas": "IDIOMAS",
+        "resumo": "RESUMO PROFISSIONAL", "competencias": "COMPETÊNCIAS",
+        "experiencia": "EXPERIÊNCIA PROFISSIONAL", "formacao": "FORMAÇÃO ACADÊMICA",
+        "certificacoes": "CERTIFICAÇÕES", "idiomas": "IDIOMAS",
     }
 
 
 def _texto_experiencia(experiencia: ExperienciaPerfil) -> str:
-    if experiencia.texto:
-        return experiencia.texto
-    partes = [
-        f"Cargo: {experiencia.cargo}" if experiencia.cargo else "",
-        f"Empresa: {experiencia.empresa}" if experiencia.empresa else "",
-        f"Período: {experiencia.periodo}" if experiencia.periodo else "",
-        f"Local: {experiencia.local}" if experiencia.local else "",
-        f"Descrição: {experiencia.descricao}" if experiencia.descricao else "",
-        f"Tecnologias e competências: {', '.join(experiencia.tecnologias)}"
-        if experiencia.tecnologias
-        else "",
-    ]
+    partes = [experiencia.cargo, experiencia.empresa, experiencia.periodo, experiencia.local]
+    partes.extend(_realizacoes(experiencia))
+    partes.extend(experiencia.tecnologias)
     return "\n".join(parte for parte in partes if parte)
-
-
-def _titulo_experiencia(experiencia: ExperienciaPerfil) -> str:
-    if experiencia.cargo and experiencia.empresa:
-        return f"{experiencia.cargo} na {experiencia.empresa}"
-    return experiencia.cargo or experiencia.empresa or "Experiência"
-
-
-def _deterministic(perfil: PerfilMestre) -> str:
-    h = _cabecalhos("pt")
-    titulo = perfil.skills[0] if perfil.skills else "Profissional"
-    linhas = [f"# {perfil.nome} | {titulo}".strip()]
-    contato = _linha_contato(perfil.contato)
-    if contato:
-        linhas.append(contato)
-    if perfil.resumo:
-        linhas += ["", f"## {h['resumo']}", perfil.resumo]
-    if perfil.skills:
-        linhas += ["", f"## {h['competencias']}", ", ".join(perfil.skills)]
-    if perfil.experiencias:
-        linhas += ["", f"## {h['experiencia']}"]
-        for experiencia in perfil.experiencias:
-            texto = _texto_experiencia(experiencia)
-            if texto:
-                periodo = experiencia.periodo or "periodo nao informado"
-                empresa = experiencia.empresa or "Empresa"
-                cargo = experiencia.cargo or "Cargo"
-                linhas += ["", f"**{empresa}** | {cargo} | {periodo}", texto]
-    if perfil.formacao:
-        linhas += ["", f"## {h['formacao']}", *[f"- {formacao}" for formacao in perfil.formacao]]
-    linhas += ["", f"## {h['certificacoes']}"]
-    linhas += ["", f"## {h['idiomas']}"]
-    return "\n".join(linhas).strip() or "# Curriculo"
 
 
 def _competencias_relevantes(req: GenerateCvRequest) -> list[str]:
     perfil_texto = normalize(_texto_perfil(req.perfil_mestre))
     relevantes = [
-        k.termo.strip()
-        for k in req.keywords
-        if k.termo.strip() and normalize(k.termo) in perfil_texto
+        k.termo.strip() for k in req.keywords
+        if k.termo.strip() and normalize(k.termo) in perfil_texto and _termo_autorizado(k.termo, req)
     ]
     for skill in req.perfil_mestre.skills:
-        if skill not in relevantes:
-            relevantes.append(skill)
-    return relevantes[:18]
+        skill_limpa = _limpar_termos_bloqueados(skill, req)
+        if skill_limpa and skill_limpa not in relevantes and _termo_autorizado(skill_limpa, req):
+            relevantes.append(skill_limpa)
+    return relevantes[:24]
+
+
+def _resumo_tailored(req: GenerateCvRequest, competencias: list[str], idioma: str) -> str:
+    titulo = _titulo_vaga_seguro(req.vaga.titulo, req)
+    top = ", ".join(competencias[:8]) or "desenvolvimento full-stack, APIs RESTful e sistemas corporativos"
+    if idioma == "en":
+        return (
+            f"Full-stack developer aligned with {titulo}, with factual experience in "
+            f"{top}, production systems, RESTful APIs and collaborative delivery."
+        )
+    if idioma == "es":
+        return (
+            f"Desarrollador full-stack alineado con {titulo}, con experiencia factual "
+            f"en {top}, sistemas en produccion, APIs RESTful y trabajo colaborativo."
+        )
+    return (
+        f"Desenvolvedor full-stack alinhado a {titulo}, com experiencia factual em "
+        f"{top}, sistemas em producao, APIs RESTful e entrega colaborativa em times "
+        "de produto."
+    )
+
+
+def _categorizar_competencias(competencias: list[str], idioma: str) -> list[tuple[str, list[str]]]:
+    rotulos = {
+        "pt": ["Linguagens", "Backend e APIs", "Frontend", "Dados", "Cloud e DevOps", "IA e Automacao", "Arquitetura e Qualidade", "Outras"],
+        "en": ["Languages", "Backend and APIs", "Frontend", "Data", "Cloud and DevOps", "AI and Automation", "Architecture and Quality", "Other"],
+        "es": ["Lenguajes", "Backend y APIs", "Frontend", "Datos", "Cloud y DevOps", "IA y Automatizacion", "Arquitectura y Calidad", "Otras"],
+    }[idioma]
+    grupos: list[list[str]] = [[] for _ in rotulos]
+    regras = [
+        (0, ("python", "typescript", "javascript", "java", "c#", "go", "ruby", "php")),
+        (1, ("api", "fastapi", "nestjs", "node", "spring", ".net", "django", "flask", "jwt", "microserv")),
+        (2, ("react", "next", "angular", "vue", "html", "css", "tailwind", "vite", "frontend")),
+        (3, ("postgres", "mysql", "mongo", "redis", "database", "banco", "sql", "prisma")),
+        (4, ("aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ci/cd", "github actions", "cloud")),
+        (5, ("llm", "rag", "agente", "agent", "ocr", "yolo", "opencv", "machine learning", "ia", "ai")),
+        (6, ("clean architecture", "solid", "design pattern", "teste", "test", "scrum", "kanban", "code review")),
+    ]
+    for competencia in competencias:
+        n = normalize(competencia)
+        indice = next((i for i, termos in regras if any(t in n for t in termos)), len(rotulos) - 1)
+        grupos[indice].append(competencia)
+    return [(rotulos[i], grupo) for i, grupo in enumerate(grupos) if grupo]
+
+
+def _selecionar_realizacoes(experiencia: ExperienciaPerfil, req: GenerateCvRequest, limite: int) -> list[str]:
+    itens = _realizacoes(experiencia)
+    if len(itens) <= limite:
+        return itens
+    termos = [normalize(k.termo) for k in req.keywords if k.termo.strip()]
+    pontuados = []
+    for indice, item in enumerate(itens):
+        texto = normalize(item)
+        pontos = sum(1 for termo in termos if termo in texto)
+        pontuados.append((pontos, -indice, indice))
+    escolhidos = sorted(i for _, _, i in sorted(pontuados, reverse=True)[:limite])
+    return [itens[i] for i in escolhidos]
 
 
 def _deterministic_request(req: GenerateCvRequest) -> str:
     perfil = req.perfil_mestre
     idioma = _idioma(req)
     h = _cabecalhos(idioma)
-    titulo = req.vaga.titulo or (perfil.skills[0] if perfil.skills else "Profissional")
-    linhas = [f"# {perfil.nome} | {titulo}".strip()]
+    titulo = _titulo_vaga_seguro(
+        req.vaga.titulo or (perfil.skills[0] if perfil.skills else "Profissional"),
+        req,
+    )
+    linhas = [f"# {perfil.nome}".strip(), f"**{titulo}**"]
     contato = _linha_contato(perfil.contato)
     if contato:
-        linhas.append(contato)
+        linhas += ["", contato]
 
     competencias = _competencias_relevantes(req)
-    resumo_kw = ", ".join(competencias[:6])
-    if idioma == "en":
-        resumo = (
-            f"{perfil.resumo} Experience aligned with {req.vaga.titulo}, with factual "
-            f"background in {resumo_kw}."
-        ).strip()
-    elif idioma == "es":
-        resumo = (
-            f"{perfil.resumo} Experiencia alineada con {req.vaga.titulo}, con base "
-            f"factual en {resumo_kw}."
-        ).strip()
-    else:
-        resumo = (
-            f"{perfil.resumo} Experiencia alinhada a {req.vaga.titulo}, com base "
-            f"factual em {resumo_kw}."
-        ).strip()
-    linhas += ["", f"## {h['resumo']}", resumo]
-    linhas += ["", f"## {h['competencias']}", ", ".join(competencias)]
+    linhas += ["", f"## {h['resumo']}", _resumo_tailored(req, competencias, idioma)]
+    linhas += ["", f"## {h['competencias']}"]
+    for categoria, valores in _categorizar_competencias(competencias, idioma):
+        linhas.append(f"- {categoria}: {', '.join(valores)}")
 
-    if perfil.experiencias:
-        linhas += ["", f"## {h['experiencia']}"]
-        for experiencia in perfil.experiencias:
-            empresa = experiencia.empresa or "Empresa"
-            cargo = experiencia.cargo or "Cargo"
-            periodo = experiencia.periodo or "periodo nao informado"
-            tecnologias = ", ".join(experiencia.tecnologias[:8])
-            descricao = experiencia.descricao.strip()
-            linhas += ["", f"**{empresa}** | {cargo} | {periodo}"]
-            if idioma == "en":
-                linhas.append(
-                    f"- Contributed with the team to {descricao} using {tecnologias}."
-                )
-            elif idioma == "es":
-                linhas.append(
-                    f"- Contribui junto al equipo en {descricao} usando {tecnologias}."
-                )
-            else:
-                linhas.append(
-                    f"- Contribui junto ao time em {descricao} usando {tecnologias}."
-                )
+    linhas += ["", f"## {h['experiencia']}"]
+    for indice, experiencia in enumerate(perfil.experiencias[:3]):
+        empresa = experiencia.empresa or "Empresa"
+        cargo = experiencia.cargo or "Cargo"
+        periodo = _periodo_mm_aaaa(experiencia.periodo, idioma) or "periodo nao informado"
+        linhas += ["", f"**{empresa}** | {cargo} | {periodo}"]
+        limite = 3 if indice < 2 else 2
+        for realizacao in _selecionar_realizacoes(experiencia, req, limite):
+            limpa = _limpar_termos_bloqueados(realizacao, req)
+            if limpa:
+                linhas.append(f"- {limpa}")
 
-    if perfil.formacao:
-        linhas += ["", f"## {h['formacao']}", *[f"- {formacao}" for formacao in perfil.formacao]]
-    linhas += ["", f"## {h['certificacoes']}", "", f"## {h['idiomas']}"]
+    linhas += ["", f"## {h['formacao']}", *perfil.formacao]
+    linhas += ["", f"## {h['certificacoes']}", *[f"- {item}" for item in perfil.certificacoes]]
+    linhas += ["", f"## {h['idiomas']}"]
+    if perfil.idiomas:
+        linhas.append(" | ".join(perfil.idiomas))
     return "\n".join(linhas).strip()
+
+
+def _normalizar_cabecalhos(texto: str, req: GenerateCvRequest) -> str:
+    h = _cabecalhos(_idioma(req))
+    sinonimos = {
+        "resumo profissional": h["resumo"], "perfil profissional": h["resumo"], "resumen profesional": h["resumo"], "professional summary": h["resumo"],
+        "competencias": h["competencias"], "habilidades": h["competencias"], "skills": h["competencias"],
+        "experiencia profissional": h["experiencia"], "experiencia profesional": h["experiencia"], "experiencias": h["experiencia"], "professional experience": h["experiencia"],
+        "formacao academica": h["formacao"], "formacion academica": h["formacao"], "educacao": h["formacao"], "education": h["formacao"],
+        "certificacoes": h["certificacoes"], "certificaciones": h["certificacoes"], "certifications": h["certificacoes"],
+        "idiomas": h["idiomas"], "languages": h["idiomas"],
+    }
+    linhas = []
+    for linha in texto.splitlines():
+        if linha.startswith("## "):
+            chave = _sem_acentos(linha[3:].strip())
+            linha = f"## {sinonimos.get(chave, linha[3:].strip())}"
+        linhas.append(linha.rstrip())
+    return "\n".join(linhas)
 
 
 def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
     texto = markdown.replace("—", "-").replace("–", "-")
-    texto = re.sub(r"[ \t]+", " ", texto)
-    idioma = _idioma(req)
-    h = _cabecalhos(idioma)
-    if "## " not in texto:
-        texto = _deterministic(req.perfil_mestre)
+    texto = "\n".join(re.sub(r"[ \t]+", " ", linha).rstrip() for linha in texto.splitlines())
+    linhas = _normalizar_cabecalhos(texto, req).strip().splitlines()
+    if linhas and linhas[0].startswith("# ") and " | " in linhas[0]:
+        nome, titulo = linhas[0][2:].split(" | ", 1)
+        linhas[0:1] = [f"# {nome.strip()}", f"**{titulo.strip()}**"]
+    uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
+    if uteis and not any(linhas[i].startswith("**") and linhas[i].endswith("**") for i in uteis[1:3]):
+        linhas.insert(uteis[0] + 1, f"**{_titulo_vaga_seguro(req.vaga.titulo or 'Profissional', req)}**")
+    uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
+    if len(uteis) >= 2 and req.vaga.titulo:
+        linhas[uteis[1]] = f"**{_titulo_vaga_seguro(req.vaga.titulo, req)}**"
+    contato = _linha_contato(req.perfil_mestre.contato)
+    uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
+    if len(uteis) >= 3 and contato and not linhas[uteis[2]].startswith("#"):
+        linhas[uteis[2]] = contato
+    return "\n".join(linhas).strip()
+
+
+def _secao(markdown: str, titulo: str) -> str:
+    match = re.search(
+        rf"^##\s+{re.escape(titulo)}\s*$([\s\S]*?)(?=^##\s+|\Z)",
+        markdown, re.MULTILINE | re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def _erros_contrato(markdown: str, req: GenerateCvRequest) -> list[str]:
+    erros: list[str] = []
+    h = _cabecalhos(_idioma(req))
+    linhas_uteis = [linha.strip() for linha in markdown.splitlines() if linha.strip()]
+    if not linhas_uteis or not re.fullmatch(r"#\s+[^|]+", linhas_uteis[0]):
+        erros.append("cabecalho de nome invalido")
+    if len(linhas_uteis) < 2 or not re.fullmatch(r"\*\*.+\*\*", linhas_uteis[1]):
+        erros.append("titulo profissional ausente")
+    if len(linhas_uteis) < 3 or linhas_uteis[2].startswith("#"):
+        erros.append("linha de contato ausente")
+    posicoes = []
     for secao in h.values():
-        if f"## {secao}" not in texto.upper():
-            texto += f"\n\n## {secao}\n"
-    return texto.strip()
+        marcador = f"## {secao}"
+        pos = markdown.upper().find(marcador.upper())
+        if pos < 0:
+            erros.append(f"secao ausente: {secao}")
+        posicoes.append(pos)
+    if all(pos >= 0 for pos in posicoes) and posicoes != sorted(posicoes):
+        erros.append("ordem de secoes invalida")
+    competencias = _secao(markdown, h["competencias"])
+    if competencias and not any(SKILL_RE.match(linha.strip()) for linha in competencias.splitlines()):
+        erros.append("competencias sem categorias")
+    certificacoes = _secao(markdown, h["certificacoes"])
+    if req.perfil_mestre.certificacoes and not any(
+        BULLET_RE.match(linha.strip()) for linha in certificacoes.splitlines()
+    ):
+        erros.append("certificacoes sem bullets")
+    experiencias = _secao(markdown, h["experiencia"])
+    if req.perfil_mestre.experiencias:
+        if not any(JOB_HEADER_RE.match(linha.strip()) for linha in experiencias.splitlines()):
+            erros.append("cabecalho de experiencia invalido")
+        if not any(BULLET_RE.match(linha.strip()) for linha in experiencias.splitlines()):
+            erros.append("experiencias sem bullets")
+    if re.search(
+        r"^(?:Cargo|Empresa|Per[ií]odo|Descri[cç][aã]o|Tecnologias)\s*:",
+        experiencias, re.MULTILINE | re.IGNORECASE,
+    ):
+        erros.append("labels crus na experiencia")
+    return erros
+
+
+def _erros_factualidade(markdown: str, req: GenerateCvRequest) -> list[str]:
+    alucinadas = sorted(
+        {
+            termo
+            for termo in TECH_CATALOG
+            if _termo_presente(termo, markdown) and not _termo_autorizado(termo, req)
+        },
+        key=str.lower,
+    )
+    if not alucinadas:
+        return []
+    return [
+        "tecnologia sem fonte factual no perfil/contexto do usuario: "
+        + ", ".join(alucinadas)
+    ]
+
+
+def _erros_saida(markdown: str, req: GenerateCvRequest) -> list[str]:
+    return [*_erros_contrato(markdown, req), *_erros_factualidade(markdown, req)]
 
 
 def _analise(markdown: str, req: GenerateCvRequest) -> AtsAnalysis:
@@ -285,21 +554,78 @@ def _analise(markdown: str, req: GenerateCvRequest) -> AtsAnalysis:
     )
 
 
+def _lacunas_autorizadas(analise: AtsAnalysis, req: GenerateCvRequest) -> list[str]:
+    return [
+        termo
+        for termo in analise.keywords_criticas_ausentes
+        if _termo_autorizado(termo, req)
+    ]
+
+
+def _gerar_llm(
+    req: GenerateCvRequest,
+    analise: AtsAnalysis,
+    lacunas: list[str],
+    markdown_atual: str | None = None,
+    erros: list[str] | None = None,
+) -> str:
+    res = complete_model(
+        _system_prompt(),
+        _user(req, analise, lacunas, markdown_atual=markdown_atual, erros=erros),
+        GenerateCvResponse,
+    )
+    return _limpar_markdown(res.markdown, req) if res.markdown.strip() else ""
+
+
 def generate_cv(req: GenerateCvRequest) -> str:
     return generate_cv_pipeline(req).markdown
 
 
 def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
     base = _deterministic_request(req)
-    inicial = _analise(_texto_perfil(req.perfil_mestre), req)
+    inicial = _analise(base, req)
     degradacao = None
+    markdown = ""
+    erros = []
     try:
-        res = complete_model(SYSTEM, _user(req), GenerateCvResponse)
-        if res.markdown.strip():
-            markdown = _limpar_markdown(res.markdown, req)
-        else:
+        lacunas = _lacunas_autorizadas(inicial, req)
+        for _ in range(2):
+            markdown = _gerar_llm(req, inicial, lacunas, erros=erros)
+            erros = _erros_saida(markdown, req) if markdown else ["resposta vazia"]
+            if not erros:
+                break
+        if erros:
             markdown = base
-            degradacao = "Groq retornou resposta vazia; usado fallback factual."
+            degradacao = "Geracao degradada para fallback factual: " + "; ".join(erros)
+        else:
+            parcial = _analise(markdown, req)
+            reforcos = _lacunas_autorizadas(parcial, req)
+            if parcial.score < 75 and reforcos:
+                reparos = [
+                    "score final abaixo de 75; reescreva para fechar lacunas "
+                    f"factuais sem stuffing: {', '.join(reforcos)}"
+                ]
+                try:
+                    candidato = _gerar_llm(
+                        req,
+                        parcial,
+                        reforcos,
+                        markdown_atual=markdown,
+                        erros=reparos,
+                    )
+                    erros_reforco = _erros_saida(candidato, req) if candidato else ["resposta vazia"]
+                    if erros_reforco:
+                        degradacao = (
+                            "Passe dirigido nao aplicado; mantida versao factual valida: "
+                            + "; ".join(erros_reforco)
+                        )
+                    else:
+                        markdown = candidato
+                except LLMUnavailable as exc:
+                    degradacao = (
+                        "Passe dirigido indisponivel; mantida versao factual valida: "
+                        f"{exc}"
+                    )
     except LLMUnavailable as exc:
         markdown = base
         degradacao = f"Groq indisponivel; usado fallback factual: {exc}"

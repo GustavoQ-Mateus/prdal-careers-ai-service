@@ -20,7 +20,15 @@ def _client_and_model() -> tuple[OpenAI, str]:
     return OpenAI(
         base_url="https://api.groq.com/openai/v1",
         api_key=os.getenv("GROQ_API_KEY", ""),
-    ), os.getenv("AI_MODEL", "openai/gpt-oss-20b")
+    ), os.getenv("AI_MODEL", "openai/gpt-oss-120b")
+
+
+def _supports_reasoning_effort(model: str) -> bool:
+    normalized = model.lower()
+    return any(
+        marker in normalized
+        for marker in ("gpt-oss", "qwen", "deepseek", "reasoning")
+    )
 
 
 def complete_model(
@@ -37,14 +45,20 @@ def complete_model(
         {"role": "user", "content": user},
     ]
     last: Exception | None = None
+    max_completion_tokens = int(os.getenv("AI_MAX_COMPLETION_TOKENS", "8192"))
+    reasoning_effort = os.getenv("AI_REASONING_EFFORT", "medium")
     for _ in range(retries + 1):
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0,
-            )
+            params = {
+                "model": model,
+                "messages": messages,
+                "response_format": {"type": "json_object"},
+                "temperature": 0,
+                "max_completion_tokens": max_completion_tokens,
+            }
+            if _supports_reasoning_effort(model):
+                params["reasoning_effort"] = reasoning_effort
+            resp = client.chat.completions.create(**params)
             content = resp.choices[0].message.content or "{}"
             return schema.model_validate(json.loads(content))
         except Exception as exc:
