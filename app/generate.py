@@ -13,11 +13,13 @@ from .schemas import (
     PerfilMestre,
 )
 from .score import calcular_score
-from .text import normalize
+from .text import content_tokens, normalize
 
 JOB_HEADER_RE = re.compile(r"^\*\*(.+?)\*\*\s*\|\s*(.+?)\s*\|\s*(.+?)\s*$")
 SKILL_RE = re.compile(r"^-\s*([^:]+):\s*(.+)$")
 BULLET_RE = re.compile(r"^-\s+(.+)$")
+FORMULA_LABEL_RE = re.compile(r"\bresultado\s*:", re.IGNORECASE)
+FORMULA_LEAK_TERMS = ("ferramenta por extenso", "resultado real", "verbo de acao")
 
 
 def _repo_root() -> Path:
@@ -121,8 +123,11 @@ def _user(
         "- Nao crie conteudo para certificacoes ou idiomas quando o perfil e o "
         "contexto nao trouxerem esses fatos. Quando existirem, certificacoes usam "
         "bullets e idiomas ficam em uma linha separada por '|'.\n\n"
-        "- A formula de bullet ATS e obrigatoria: verbo de acao -> o que foi feito "
-        "-> resultado real -> ferramenta por extenso.\n"
+        "- Cada bullet comeca com um verbo de acao forte, encadeia o que foi feito, "
+        "mostra o impacto real obtido e nomeia a tecnologia por extenso. Isso e "
+        "estrutura da frase, nunca rotulo escrito no texto: jamais escreva as "
+        "palavras 'resultado', 'ferramenta por extenso' ou qualquer nome de etapa "
+        "dentro do bullet.\n"
         "- Nao afirme nenhuma tecnologia, empresa, metrica, autoria ou senioridade "
         "que nao exista no perfil-mestre ou no contexto factual deste request.\n\n"
         f"Erros a corrigir nesta tentativa:\n{reparos}\n\n"
@@ -197,6 +202,19 @@ def _titulo_vaga_seguro(titulo: str, req: GenerateCvRequest | None = None) -> st
     return limpo or "Desenvolvedor Full-Stack"
 
 
+def _url_contato(chave: str, valor: str) -> str | None:
+    if chave.startswith("email"):
+        return f"mailto:{valor}" if "@" in valor else None
+    if chave.startswith(("linkedin", "github", "site")):
+        return valor if "://" in valor else f"https://{valor}"
+    return None
+
+
+def _formatar_contato(chave: str, valor: str) -> str:
+    url = _url_contato(chave, valor)
+    return f"[{valor}]({url})" if url else valor
+
+
 def _linha_contato(contato: dict[str, Any]) -> str:
     ordem = ["telefone", "email", "localizacao", "cidade", "site", "linkedin", "github"]
     usados: set[str] = set()
@@ -204,9 +222,11 @@ def _linha_contato(contato: dict[str, Any]) -> str:
     for chave in ordem:
         valor = contato.get(chave)
         if valor:
-            partes.append(str(valor))
+            partes.append(_formatar_contato(chave, str(valor)))
             usados.add(chave)
-    partes.extend(str(v) for k, v in contato.items() if k not in usados and v)
+    partes.extend(
+        _formatar_contato(k, str(v)) for k, v in contato.items() if k not in usados and v
+    )
     return " | ".join(partes)
 
 
@@ -518,8 +538,39 @@ def _erros_factualidade(markdown: str, req: GenerateCvRequest) -> list[str]:
     ]
 
 
+def _erros_formula(markdown: str) -> list[str]:
+    normalizado = normalize(markdown)
+    vazamentos = [termo for termo in FORMULA_LEAK_TERMS if termo in normalizado]
+    if FORMULA_LABEL_RE.search(markdown):
+        vazamentos.append("resultado:")
+    if not vazamentos:
+        return []
+    return [
+        "vocabulario interno da formula de bullet vazou na saida: "
+        + ", ".join(vazamentos)
+    ]
+
+
+def _erros_coerencia(markdown: str, req: GenerateCvRequest) -> list[str]:
+    h = _cabecalhos(_idioma(req))
+    resumo = _secao(markdown, h["resumo"])
+    if not resumo:
+        return []
+    alvo = set(content_tokens(req.vaga.titulo)) | {
+        token for k in req.keywords for token in content_tokens(k.termo)
+    }
+    if not alvo or alvo & set(content_tokens(resumo)):
+        return []
+    return ["resumo profissional sem vocabulario em comum com a vaga"]
+
+
 def _erros_saida(markdown: str, req: GenerateCvRequest) -> list[str]:
-    return [*_erros_contrato(markdown, req), *_erros_factualidade(markdown, req)]
+    return [
+        *_erros_contrato(markdown, req),
+        *_erros_factualidade(markdown, req),
+        *_erros_formula(markdown),
+        *_erros_coerencia(markdown, req),
+    ]
 
 
 def _analise(markdown: str, req: GenerateCvRequest) -> AtsAnalysis:

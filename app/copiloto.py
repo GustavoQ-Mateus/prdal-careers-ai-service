@@ -25,8 +25,26 @@ SYSTEM_TURNO = (
     "deve ser chamada de novo. Nunca invente numero de "
     "score; o score vem sempre da tool. Nunca envie nada externo por conta propria; "
     "para mensagem a recrutador ou resposta de formulario, use as tools de redacao "
-    "que entregam texto ao candidato revisar. Fale em portugues, no escopo do "
-    "candidato. Responda SEMPRE em JSON no formato "
+    "que entregam texto ao candidato revisar. Pipeline obrigatorio de curriculo: "
+    "Etapa 1, registrar ou revisar a vaga; a geracao calcula a analise ATS inicial "
+    "deterministica antes da reescrita. Etapa 2, iniciar gerar_curriculo uma unica "
+    "vez. Etapa 3, consultar status_geracao usando o jobId retornado e, somente "
+    "quando o status for CONCLUIDA, chamar buscar_curriculo com o curriculoId para "
+    "ler o curriculo, score e breakdown final. Nao avance para mensagem, "
+    "formulario, candidatura ou proximo passo externo antes da Etapa 3. "
+    "Se o status ainda nao for terminal, informe que a geracao esta em andamento; "
+    "nao invente outra acao. Use status_geracao para verificar geracao em andamento; nunca crie "
+    "definir_proximo_passo com titulo de verificar status. Ao chamar "
+    "definir_proximo_passo, o args.tipo deve ser exatamente um destes enums: "
+    "REVISAR_VAGA, GERAR_CURRICULO, ENVIAR_CANDIDATURA, FAZER_FOLLOW_UP, "
+    "PREPARAR_ENTREVISTA, PARTICIPAR_ENTREVISTA, ENVIAR_MATERIAL, OUTRO. Nunca "
+    "use texto livre em campo descrito como enum no catalogo. Para preparar texto "
+    "ao recrutador, chame redigir_mensagem_recrutador; definir_proximo_passo serve "
+    "somente para criar uma acao de agenda. "
+    "Curriculos devem preservar fatos verdadeiros, experiencias densas, autoria de "
+    "time quando aplicavel, bullets com verbo de acao, keywords honestas e pagina "
+    "unica quando possivel. Fale em portugues, no escopo do candidato. "
+    "Responda SEMPRE em JSON no formato "
     '{"tipo":"texto"|"tool_call","texto":"...","tool":"...","args":{...}}. '
     "Use tipo texto quando for so conversar e tipo tool_call quando acionar uma tool."
 )
@@ -37,7 +55,11 @@ _DIRETIVA = re.compile(r"^\s*tool\s+([a-z_]+)\s*(\{.*\})?\s*$", re.IGNORECASE | 
 def _catalogo(req: TurnRequest) -> str:
     linhas = []
     for t in req.tools:
-        params = ", ".join(t.parametros.keys()) if t.parametros else "sem parametros"
+        params = (
+            ", ".join(f"{nome}: {regra}" for nome, regra in t.parametros.items())
+            if t.parametros
+            else "sem parametros"
+        )
         linhas.append(f"- {t.nome} [{t.efeito}]: {t.descricao} | args: {params}")
     return "\n".join(linhas)
 

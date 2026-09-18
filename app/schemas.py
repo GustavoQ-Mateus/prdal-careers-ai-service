@@ -46,6 +46,7 @@ class ExperienciaPerfil(CamelModel):
     local: str = ""
     descricao: str = ""
     tecnologias: list[str] = []
+    realizacoes: list[str] = []
     texto: str = ""
 
 
@@ -55,6 +56,8 @@ class PerfilMestre(CamelModel):
     resumo: str = ""
     experiencias: list[ExperienciaPerfil] = []
     formacao: list[str] = []
+    certificacoes: list[str] = []
+    idiomas: list[str] = []
     skills: list[str] = []
 
 
