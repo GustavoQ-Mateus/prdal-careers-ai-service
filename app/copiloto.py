@@ -25,13 +25,23 @@ SYSTEM_TURNO = (
     "deve ser chamada de novo. Nunca invente numero de "
     "score; o score vem sempre da tool. Nunca envie nada externo por conta propria; "
     "para mensagem a recrutador ou resposta de formulario, use as tools de redacao "
-    "que entregam texto ao candidato revisar. Pipeline obrigatorio de curriculo: "
-    "Etapa 1, registrar ou revisar a vaga; a geracao calcula a analise ATS inicial "
-    "deterministica antes da reescrita. Etapa 2, iniciar gerar_curriculo uma unica "
-    "vez. Etapa 3, consultar status_geracao usando o jobId retornado e, somente "
-    "quando o status for CONCLUIDA, chamar buscar_curriculo com o curriculoId para "
-    "ler o curriculo, score e breakdown final. Nao avance para mensagem, "
-    "formulario, candidatura ou proximo passo externo antes da Etapa 3. "
+    "que entregam texto ao candidato revisar. Sequencia interna obrigatoria de "
+    "curriculo: primeiro, registrar ou revisar a vaga; depois, iniciar "
+    "gerar_curriculo uma unica vez; por fim, consultar status_geracao usando o "
+    "jobId retornado e, somente quando o status for CONCLUIDA, chamar "
+    "buscar_curriculo com o curriculoId para ler o curriculo, score e breakdown "
+    "final. Nao avance para mensagem, formulario, candidatura ou proximo passo "
+    "externo antes de concluir essa consulta final. Quando buscar_curriculo trouxer "
+    "analiseInicial e analiseFinal apos uma geracao CONCLUIDA, responda ao candidato "
+    "em duas mensagens de texto sequenciais, nunca com um resumo de uma linha. A "
+    "primeira e 'Etapa 1 — Analise ATS': informe score, keywordsEncontradas, "
+    "keywordsCriticasAusentes, pontosEliminatorios somente quando houver, e o "
+    "veredicto em no maximo duas linhas. Em seguida, escreva uma linha contendo "
+    "somente [[NARRACAO_ATS_ETAPA_3]] e continue com a segunda mensagem, 'Etapa 3 "
+    "— Score pos-geracao', comparando o score final ao inicial e dizendo o que "
+    "mudou. O marcador e interno e jamais pode aparecer ao candidato. Para texto "
+    "visivel ao candidato, 'Etapa 1', 'Etapa 2' e 'Etapa 3' significam somente a "
+    "metodologia ATS: Analise, Reescrita e Score pos-geracao. "
     "Se o status ainda nao for terminal, informe que a geracao esta em andamento; "
     "nao invente outra acao. Use status_geracao para verificar geracao em andamento; nunca crie "
     "definir_proximo_passo com titulo de verificar status. Ao chamar "
@@ -84,6 +94,59 @@ def _regerar_por_perfil_atualizado(req: TurnRequest) -> TurnResponse | None:
 
 def _texto_para_candidato(texto: str) -> str:
     return _DETALHE_INTERNO.sub("esta acao", texto)
+
+
+def _narracao_ats_concluida(req: TurnRequest) -> TurnResponse | None:
+    ultima = req.mensagens[-1] if req.mensagens else None
+    if not ultima or ultima.papel != "tool" or ultima.tool != "buscar_curriculo":
+        return None
+    try:
+        curriculo = json.loads(ultima.conteudo)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(curriculo, dict):
+        return None
+    inicial = curriculo.get("analiseInicial")
+    final = curriculo.get("analiseFinal")
+    if not isinstance(inicial, dict) or not isinstance(final, dict):
+        return None
+    score_inicial = inicial.get("score")
+    score_final = final.get("score")
+    if not isinstance(score_inicial, (int, float)) or not isinstance(score_final, (int, float)):
+        return None
+
+    def lista(campo: str) -> str:
+        valores = inicial.get(campo)
+        if not isinstance(valores, list):
+            return "Nenhuma"
+        itens = [str(valor).strip() for valor in valores if str(valor).strip()]
+        return ", ".join(itens) if itens else "Nenhuma"
+
+    pontos = lista("pontosEliminatorios")
+    linhas_iniciais = [
+        "Etapa 1 — Analise ATS",
+        f"Score: {score_inicial}",
+        f"Keywords encontradas: {lista('keywordsEncontradas')}",
+        f"Keywords criticas ausentes: {lista('keywordsCriticasAusentes')}",
+    ]
+    if pontos != "Nenhuma":
+        linhas_iniciais.append(f"Pontos eliminatorios: {pontos}")
+    linhas_iniciais.append(f"Veredicto: {str(inicial.get('veredicto') or 'Sem veredicto informado.')}")
+
+    diferenca = score_final - score_inicial
+    if diferenca > 0:
+        comparacao = f"aumentou {diferenca:g} ponto(s)"
+    elif diferenca < 0:
+        comparacao = f"reduziu {abs(diferenca):g} ponto(s)"
+    else:
+        comparacao = "permaneceu igual"
+    texto = (
+        "\n".join(linhas_iniciais)
+        + "\n\n[[NARRACAO_ATS_ETAPA_3]]\n\n"
+        + "Etapa 3 — Score pos-geracao\n"
+        + f"Score final: {score_final}, comparado ao inicial de {score_inicial}: {comparacao}."
+    )
+    return TurnResponse(tipo="texto", texto=texto)
 
 
 def _catalogo(req: TurnRequest) -> str:
@@ -144,6 +207,9 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
     regeracao = _regerar_por_perfil_atualizado(req)
     if regeracao:
         return regeracao
+    narracao = _narracao_ats_concluida(req)
+    if narracao:
+        return narracao
     try:
         res = complete_model(SYSTEM_TURNO, _user(req), TurnResponse)
         if res.tipo in ("texto", "tool_call"):
