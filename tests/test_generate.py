@@ -7,6 +7,7 @@ from app.generate import (
     _erros_factualidade,
     _erros_formula,
     _linha_contato,
+    analisar_ats,
     generate_cv_pipeline,
 )
 from app.llm import LLMUnavailable
@@ -83,6 +84,14 @@ class GenerateCvTest(unittest.TestCase):
         self.assertIn("[github.com/pessoa](https://github.com/pessoa)", linha)
         self.assertIn("+55 85 99999-0000", linha)
         self.assertNotIn("[+55 85 99999-0000]", linha)
+
+    def test_analise_avulsa_reaproveita_a_etapa_inicial_sem_gerar_curriculo(self):
+        resultado = analisar_ats(self.req)
+
+        self.assertIsInstance(resultado.score, int)
+        self.assertIsInstance(resultado.keywords_encontradas, list)
+        self.assertIsInstance(resultado.keywords_criticas_ausentes, list)
+        self.assertTrue(resultado.veredicto)
 
     def test_erros_formula_rejeita_vazamento_do_vocabulario_interno(self):
         self.assertEqual([], _erros_formula("Aumentei vendas em 30% usando Python."))

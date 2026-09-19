@@ -642,6 +642,14 @@ def generate_cv(req: GenerateCvRequest) -> str:
     return generate_cv_pipeline(req).markdown
 
 
+def analisar_ats(req: GenerateCvRequest) -> AtsAnalysis:
+    if not req.keywords:
+        raise KeywordsUnavailable(
+            "extracao de keywords pendente; tente novamente antes de analisar"
+        )
+    return _analise(_deterministic_request(req), req)
+
+
 def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
     if not req.keywords:
         raise KeywordsUnavailable(

@@ -6,13 +6,14 @@ from pydantic import BaseModel
 
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
-from .generate import KeywordsUnavailable, generate_cv, generate_cv_pipeline
+from .generate import KeywordsUnavailable, analisar_ats, generate_cv, generate_cv_pipeline
 from .keywords import extract_keywords
 from .llm import LLMUnavailable
 from .rag import consultar, indexar, substituir
 from .schemas import (
     ClassifyRequest,
     ClassifyResponse,
+    AtsAnalysis,
     GenerateCvRequest,
     GenerateCvResponse,
     GeneratePipelineResponse,
@@ -109,6 +110,14 @@ def generate(req: GenerateCvRequest) -> GenerateCvResponse:
 def generate_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
     try:
         return generate_cv_pipeline(req)
+    except KeywordsUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/analisar-ats", response_model=AtsAnalysis)
+def analisar(req: GenerateCvRequest) -> AtsAnalysis:
+    try:
+        return analisar_ats(req)
     except KeywordsUnavailable as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
