@@ -1,14 +1,15 @@
 import os
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
 from .generate import generate_cv, generate_cv_pipeline
 from .keywords import extract_keywords
-from .rag import consultar, indexar
+from .llm import LLMUnavailable
+from .rag import consultar, indexar, substituir
 from .schemas import (
     ClassifyRequest,
     ClassifyResponse,
@@ -21,6 +22,7 @@ from .schemas import (
     KeywordsResponse,
     QueryRequest,
     QueryResponse,
+    ReplaceIngestRequest,
     RedigirFormularioRequest,
     RedigirFormularioResponse,
     RedigirMensagemRequest,
@@ -118,6 +120,13 @@ def context_ingest(req: IngestRequest) -> IngestResponse:
     return indexar(req.documentos)
 
 
+@app.post("/context/replace", response_model=IngestResponse)
+def context_replace(req: ReplaceIngestRequest) -> IngestResponse:
+    if any(documento.usuario_id != req.usuario_id for documento in req.documentos):
+        raise HTTPException(status_code=400, detail="replace exige documentos do usuario informado")
+    return substituir(req.usuario_id, req.documentos)
+
+
 @app.post("/context/query", response_model=QueryResponse)
 def context_query(req: QueryRequest) -> QueryResponse:
     return consultar(req.usuario_id, req.query, req.k)
@@ -125,7 +134,10 @@ def context_query(req: QueryRequest) -> QueryResponse:
 
 @app.post("/copiloto/turn", response_model=TurnResponse)
 def copiloto_turn(req: TurnRequest) -> TurnResponse:
-    return planejar_turno(req)
+    try:
+        return planejar_turno(req)
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=503, detail="copiloto indisponivel no momento") from exc
 
 
 @app.post("/copiloto/redigir-mensagem", response_model=RedigirMensagemResponse)

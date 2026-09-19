@@ -83,6 +83,12 @@ def indexar(documentos: list[Documento]) -> IngestResponse:
     return IngestResponse(indexados=total)
 
 
+def substituir(usuario_id: str, documentos: list[Documento]) -> IngestResponse:
+    colecao = _collection()
+    colecao.delete(where={"usuarioId": usuario_id})
+    return indexar(documentos)
+
+
 def consultar(usuario_id: str, query: str, k: int) -> QueryResponse:
     colecao = _collection()
     resultado = colecao.query(

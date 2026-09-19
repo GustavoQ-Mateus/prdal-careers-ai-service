@@ -132,6 +132,11 @@ class IngestRequest(CamelModel):
     documentos: list[Documento]
 
 
+class ReplaceIngestRequest(CamelModel):
+    usuario_id: str
+    documentos: list[Documento]
+
+
 class IngestResponse(CamelModel):
     indexados: int
 

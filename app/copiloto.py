@@ -1,5 +1,6 @@
 import json
 import re
+import unicodedata
 
 from .llm import LLMUnavailable, complete_model
 from .schemas import (
@@ -66,20 +67,49 @@ SYSTEM_TURNO = (
 )
 
 _DIRETIVA = re.compile(r"^\s*tool\s+([a-z_]+)\s*(\{.*\})?\s*$", re.IGNORECASE | re.DOTALL)
+_FERRAMENTAS_INTERNAS = (
+    "listar_oportunidades|buscar_oportunidade|abrir_workspace|ler_timeline|"
+    "listar_acoes|ler_perfil|listar_curriculos|buscar_curriculo|status_geracao|"
+    "listar_banco_vagas|ler_agenda|registrar_oportunidade|ativar_entrada|"
+    "ativar_banco_vaga|gerar_curriculo|editar_curriculo|definir_proximo_passo|"
+    "concluir_passo|mover_estagio|registrar_candidatura|atualizar_candidatura|"
+    "registrar_nota|redigir_mensagem_recrutador|redigir_respostas_formulario"
+)
 _DETALHE_INTERNO = re.compile(
-    r"\b(?:[a-z]+_)+[a-z]+\b|\b(?:GET|POST|PUT|PATCH)\s+/\S+|\b(?:payload|json|tool|tools|rota)\b",
+    rf"\b(?:{_FERRAMENTAS_INTERNAS})\b|\b(?:GET|POST|PUT|PATCH)\s+/\S+|\b(?:payload|json|tool|tools|rota)\b",
     re.IGNORECASE,
 )
+
+
+def _normalizar_intencao(texto: str) -> str:
+    return "".join(
+        caractere
+        for caractere in unicodedata.normalize("NFD", texto.lower())
+        if not unicodedata.combining(caractere)
+    )
+
+
+def _mencoes_proximas(texto: str, grupos: tuple[tuple[str, ...], tuple[str, ...]]) -> bool:
+    esquerda, direita = grupos
+    for a in esquerda:
+        for b in direita:
+            for primeiro in re.finditer(rf"\b{a}\w*\b", texto):
+                if re.search(rf"\b{b}\w*\b", texto[max(0, primeiro.start() - 48) : primeiro.end() + 48]):
+                    return True
+    return False
 
 
 def _regerar_por_perfil_atualizado(req: TurnRequest) -> TurnResponse | None:
     if not req.oportunidade_id or not req.mensagens:
         return None
-    ultimas_mensagens = [m.conteudo.lower() for m in req.mensagens if m.papel == "user"][-2:]
+    ultimas_mensagens = [_normalizar_intencao(m.conteudo) for m in req.mensagens if m.papel == "user"][-2:]
     contexto = " ".join(ultimas_mensagens)
-    atualizou = any(termo in contexto for termo in ("atualiz", "adicionei", "inclui", "coloquei"))
-    perfil = "perfil" in contexto or "competenc" in contexto
-    tentar = any(termo in contexto for termo in ("tente", "novamente", "nova versao", "reger"))
+    atualizou = bool(re.search(r"\b(atualiz|adicionei|inclui|coloquei)\w*\b", contexto))
+    perfil = _mencoes_proximas(
+        contexto,
+        (("atualiz", "adicionei", "inclui", "coloquei"), ("perfil", "competenc")),
+    )
+    tentar = bool(re.search(r"\b(tente|novamente|nova versao|reger|tentar)\w*\b", contexto))
     if not (atualizou and perfil and tentar):
         return None
     ultima = req.mensagens[-1]
@@ -92,8 +122,13 @@ def _regerar_por_perfil_atualizado(req: TurnRequest) -> TurnResponse | None:
     return TurnResponse(tipo="tool_call", tool="ler_perfil")
 
 
-def _texto_para_candidato(texto: str) -> str:
-    return _DETALHE_INTERNO.sub("esta acao", texto)
+def _texto_para_candidato(texto: str, req: TurnRequest | None = None) -> str:
+    protegido = _DETALHE_INTERNO.sub("esta acao", texto)
+    if req:
+        nomes = [re.escape(tool.nome) for tool in req.tools]
+        if nomes:
+            protegido = re.sub(rf"\b(?:{'|'.join(nomes)})\b", "esta acao", protegido)
+    return protegido
 
 
 def _narracao_ats_concluida(req: TurnRequest) -> TurnResponse | None:
@@ -200,7 +235,7 @@ def _fallback(req: TurnRequest) -> TurnResponse:
                 "O copiloto esta indisponivel no momento. Tente novamente em instantes."
             ),
         )
-    return TurnResponse(tipo="texto", texto="Etapa concluida.")
+    raise LLMUnavailable("copiloto indisponivel no momento")
 
 
 def planejar_turno(req: TurnRequest) -> TurnResponse:
@@ -214,13 +249,12 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
         res = complete_model(SYSTEM_TURNO, _user(req), TurnResponse)
         if res.tipo in ("texto", "tool_call"):
             if res.tipo == "tool_call" and not res.tool:
-                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or ""))
+                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or "", req))
             if res.tipo == "texto":
-                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or ""))
+                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or "", req))
             return res
     except LLMUnavailable:
-        pass
-    return _fallback(req)
+        return _fallback(req)
 
 
 SYSTEM_MENSAGEM = (
