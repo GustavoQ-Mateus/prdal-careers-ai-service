@@ -2,16 +2,84 @@ import unittest
 from unittest.mock import patch
 
 from app.generate import (
+    _deterministic_request,
+    _erros_completude,
     _erros_contrato,
     _erros_coerencia,
     _erros_factualidade,
     _erros_formula,
+    _erros_ordem,
+    _erros_saida,
+    _limpar_markdown,
     _linha_contato,
     analisar_ats,
     generate_cv_pipeline,
+    reduzir_curriculo,
 )
 from app.llm import LLMUnavailable
-from app.schemas import GenerateCvRequest
+from app.schemas import GenerateCvRequest, GenerateCvResponse
+
+
+def _req_tres_experiencias() -> GenerateCvRequest:
+    return GenerateCvRequest.model_validate(
+        {
+            "perfilMestre": {
+                "nome": "Gustavo Queiroz Mateus",
+                "contato": {
+                    "telefone": "+55 85 99120-7171",
+                    "email": "gustavoqueirozunifor@edu.unifor.br",
+                    "linkedin": "https://linkedin.com/in/gustavo-queiroz-mateus-935255283",
+                },
+                "resumo": "Desenvolvedor back-end com experiência em APIs REST e sistemas em produção.",
+                "experiencias": [
+                    {
+                        "empresa": "Modera Road Inspector",
+                        "cargo": "Desenvolvedor Full-Stack",
+                        "periodo": "06/2026 - atual",
+                        "descricao": (
+                            "- Atuei no back-end de plataforma web em produção com Python (FastAPI) e PostgreSQL.\n"
+                            "- Implementei autenticação JWT multi-tenant e filas assíncronas.\n"
+                            "- Atuei na infraestrutura como código e CI/CD junto ao time."
+                        ),
+                        "tecnologias": ["Python", "FastAPI", "PostgreSQL"],
+                    },
+                    {
+                        "empresa": "Saraiva Leão · Assessoria e Cálculos Judiciais",
+                        "cargo": "Desenvolvedor Full-Stack",
+                        "periodo": "03/2025 - atual",
+                        "descricao": (
+                            "- Construí um ERP corporativo com Python (FastAPI) e MySQL em produção.\n"
+                            "- Implementei autenticação JWT multiempresa com auditoria.\n"
+                            "- Assumi o deploy e a sustentação em produção."
+                        ),
+                        "tecnologias": ["Python", "FastAPI", "MySQL"],
+                    },
+                    {
+                        "empresa": "Micro&Money · Softwares Inteligentes",
+                        "cargo": "Estágio Full-Stack",
+                        "periodo": "01/2026 - 04/2026",
+                        "descricao": "- Atuei em módulos ERP com Java (Spring Boot) sobre MySQL.",
+                        "tecnologias": ["Java", "Spring Boot", "MySQL"],
+                    },
+                ],
+                "formacao": ["UNIFOR | ADS | 02/2025 - 06/2027"],
+                "certificacoes": [],
+                "idiomas": ["Português, nativo", "Inglês, intermediário"],
+                "skills": ["Java", "Spring Boot", "Python", "FastAPI", "PostgreSQL", "MySQL"],
+            },
+            "vaga": {
+                "titulo": "Desenvolvedor Back-End Java Jr",
+                "empresa": "FCamara",
+                "descricao": "Buscamos Java, Spring Boot, APIs REST e MySQL para sistemas corporativos.",
+            },
+            "keywords": [
+                {"termo": "Java", "peso": 1},
+                {"termo": "Spring Boot", "peso": 0.9},
+                {"termo": "MySQL", "peso": 0.8},
+                {"termo": "APIs REST", "peso": 0.7},
+            ],
+        }
+    )
 
 
 class GenerateCvTest(unittest.TestCase):
@@ -143,6 +211,103 @@ class GenerateCvTest(unittest.TestCase):
 
         self.assertIn("django", erros_sem[0].lower())
         self.assertEqual([], erros_com)
+
+
+class IntegridadeConteudoTest(unittest.TestCase):
+    def setUp(self):
+        self.req = _req_tres_experiencias()
+
+    def _experiencia(self, ordem: list[str]) -> str:
+        headers = {
+            "modera": "**Modera Road Inspector** | Desenvolvedor Full-Stack | 06/2026 - atual\n- Atuei no back-end com Python (FastAPI) e PostgreSQL.",
+            "saraiva": "**Saraiva Leão · Assessoria e Cálculos Judiciais** | Desenvolvedor Full-Stack | 03/2025 - atual\n- Construí um ERP com FastAPI e MySQL.",
+            "micro": "**Micro&Money · Softwares Inteligentes** | Estágio Full-Stack | 01/2026 - 04/2026\n- Atuei em módulos ERP com Java (Spring Boot).",
+        }
+        corpo = "\n".join(headers[chave] for chave in ordem)
+        return f"## EXPERIÊNCIA PROFISSIONAL\n{corpo}\n\n## FORMAÇÃO ACADÊMICA\n"
+
+    def test_deterministic_inclui_as_tres_experiencias_em_ordem(self):
+        markdown = _deterministic_request(self.req)
+
+        self.assertIn("Modera Road Inspector", markdown)
+        self.assertIn("Saraiva Leão", markdown)
+        self.assertIn("Micro&Money", markdown)
+        pos_modera = markdown.index("Modera Road Inspector")
+        pos_saraiva = markdown.index("Saraiva Leão")
+        pos_micro = markdown.index("Micro&Money")
+        self.assertLess(pos_modera, pos_saraiva)
+        self.assertLess(pos_saraiva, pos_micro)
+        self.assertEqual([], _erros_saida(markdown, self.req))
+
+    def test_completude_pega_experiencia_omitida(self):
+        completo = self._experiencia(["modera", "saraiva", "micro"])
+        self.assertEqual([], _erros_completude(completo, self.req))
+
+        sem_modera = self._experiencia(["saraiva", "micro"])
+        erros = _erros_completude(sem_modera, self.req)
+        self.assertTrue(erros)
+        self.assertIn("Modera Road Inspector", erros[0])
+
+    def test_ordem_pega_inversao_cronologica(self):
+        certo = self._experiencia(["modera", "saraiva", "micro"])
+        self.assertEqual([], _erros_ordem(certo, self.req))
+
+        invertido = self._experiencia(["micro", "modera", "saraiva"])
+        self.assertTrue(_erros_ordem(invertido, self.req))
+
+    def test_pipeline_recupera_omissao_do_modelo(self):
+        omitido = GenerateCvResponse(
+            markdown=(
+                "# Gustavo Queiroz Mateus\n**Desenvolvedor Back-End Java Jr**\n"
+                "+55 85 99120-7171\n\n"
+                "## RESUMO PROFISSIONAL\nDesenvolvedor Java back-end.\n\n"
+                "## COMPETÊNCIAS\n- Linguagens: Java\n\n"
+                "## EXPERIÊNCIA PROFISSIONAL\n"
+                "**Micro&Money · Softwares Inteligentes** | Estágio Full-Stack | 01/2026 - 04/2026\n"
+                "- Atuei em módulos ERP com Java (Spring Boot).\n\n"
+                "## FORMAÇÃO ACADÊMICA\nUNIFOR\n\n"
+                "## CERTIFICAÇÕES\n\n## IDIOMAS\nPortuguês, nativo\n"
+            )
+        )
+        with patch("app.generate.complete_model", return_value=omitido):
+            resultado = generate_cv_pipeline(self.req)
+
+        self.assertIsNotNone(resultado.degradacao)
+        self.assertIn("Modera Road Inspector", resultado.markdown)
+        self.assertIn("Saraiva Leão", resultado.markdown)
+        self.assertIn("Micro&Money", resultado.markdown)
+        pos_modera = resultado.markdown.index("Modera Road Inspector")
+        pos_micro = resultado.markdown.index("Micro&Money")
+        self.assertLess(pos_modera, pos_micro)
+
+    def test_reduzir_aplica_corte_valido(self):
+        reduzido = GenerateCvResponse(markdown=_deterministic_request(self.req))
+        with patch("app.generate.complete_model", return_value=reduzido):
+            resultado = reduzir_curriculo(self.req, "# markdown longo com duas paginas")
+
+        self.assertIsNone(resultado.degradacao)
+        self.assertIn("Modera Road Inspector", resultado.markdown)
+        self.assertIn("Saraiva Leão", resultado.markdown)
+        self.assertIn("Micro&Money", resultado.markdown)
+
+    def test_reduzir_mantem_versao_anterior_quando_corte_falha(self):
+        anterior = "# versao anterior que estoura pagina"
+        with patch("app.generate.complete_model", side_effect=LLMUnavailable("offline")):
+            resultado = reduzir_curriculo(self.req, anterior)
+
+        self.assertEqual(anterior, resultado.markdown)
+        self.assertIsNotNone(resultado.degradacao)
+
+    def test_limpar_normaliza_hifen_nao_separavel(self):
+        markdown = (
+            "# Gustavo Queiroz Mateus\n**Desenvolvedor Back‑End Java Jr**\n"
+            "contato\n\n## RESUMO PROFISSIONAL\nCI‑CD e back‑end.\n"
+        )
+        limpo = _limpar_markdown(markdown, self.req)
+
+        self.assertNotIn("‑", limpo)
+        self.assertIn("Back-End", limpo)
+        self.assertIn("CI-CD", limpo)
 
 
 if __name__ == "__main__":

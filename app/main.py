@@ -6,7 +6,13 @@ from pydantic import BaseModel
 
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
-from .generate import KeywordsUnavailable, analisar_ats, generate_cv, generate_cv_pipeline
+from .generate import (
+    KeywordsUnavailable,
+    analisar_ats,
+    generate_cv,
+    generate_cv_pipeline,
+    reduzir_curriculo,
+)
 from .keywords import extract_keywords
 from .llm import LLMUnavailable
 from .rag import consultar, indexar, substituir
@@ -23,6 +29,7 @@ from .schemas import (
     KeywordsResponse,
     QueryRequest,
     QueryResponse,
+    ReduzirCvRequest,
     ReplaceIngestRequest,
     RedigirFormularioRequest,
     RedigirFormularioResponse,
@@ -110,6 +117,14 @@ def generate(req: GenerateCvRequest) -> GenerateCvResponse:
 def generate_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
     try:
         return generate_cv_pipeline(req)
+    except KeywordsUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/reduzir-curriculo", response_model=GeneratePipelineResponse)
+def reduzir(req: ReduzirCvRequest) -> GeneratePipelineResponse:
+    try:
+        return reduzir_curriculo(req, req.markdown_atual)
     except KeywordsUnavailable as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

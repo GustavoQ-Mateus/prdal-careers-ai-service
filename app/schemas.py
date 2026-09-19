@@ -85,6 +85,10 @@ class GenerateCvResponse(CamelModel):
     markdown: str
 
 
+class ReduzirCvRequest(GenerateCvRequest):
+    markdown_atual: str
+
+
 class AtsAnalysis(CamelModel):
     score: int
     keywords_encontradas: list[str] = []

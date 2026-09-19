@@ -795,3 +795,50 @@ def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
         analise_final=final,
         degradacao=degradacao,
     )
+
+
+ERRO_EXCESSO_PAGINA = (
+    "o curriculo excedeu uma pagina mesmo apos compactar o layout; reduza para no "
+    "maximo 2 a 3 bullets por experiencia e enxugue os menos densos, sem esvaziar a "
+    "substancia tecnica. So remova uma experiencia inteira se o perfil-mestre tiver "
+    "mais de 3 experiencias, e nesse caso remova a menos aderente a vaga, nunca a "
+    "mais recente. Preserve todas as experiencias do perfil-mestre quando forem 3 ou "
+    "menos."
+)
+
+
+def reduzir_curriculo(
+    req: GenerateCvRequest, markdown_atual: str
+) -> GeneratePipelineResponse:
+    if not req.keywords:
+        raise KeywordsUnavailable(
+            "extracao de keywords pendente; tente novamente antes de reduzir o curriculo"
+        )
+    inicial = _analise(_deterministic_request(req), req)
+    markdown = markdown_atual
+    degradacao = None
+    try:
+        candidato = _gerar_llm(
+            req,
+            inicial,
+            _lacunas_autorizadas(inicial, req),
+            markdown_atual=markdown_atual,
+            erros=[ERRO_EXCESSO_PAGINA],
+        )
+        erros = _erros_saida(candidato, req) if candidato else ["resposta vazia"]
+        if erros:
+            degradacao = (
+                "Corte de conteudo nao aplicado; mantida versao anterior: "
+                + "; ".join(erros)
+            )
+        else:
+            markdown = candidato
+    except LLMUnavailable as exc:
+        degradacao = f"Corte de conteudo indisponivel: {exc}"
+    final = _analise(markdown, req)
+    return GeneratePipelineResponse(
+        markdown=markdown,
+        analise_inicial=inicial,
+        analise_final=final,
+        degradacao=degradacao,
+    )
