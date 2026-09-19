@@ -64,7 +64,7 @@ class PerfilAtualizadoCopilotoTest(unittest.TestCase):
         )
 
         self.assertIsNotNone(resposta)
-        self.assertEqual(resposta.tool, "gerar_curriculo")
+        self.assertEqual(resposta.tool, "analisar_ats")
         self.assertEqual(resposta.args, {"oportunidadeId": "vaga-1"})
 
     def test_nao_regera_sem_pedido_de_nova_tentativa(self):

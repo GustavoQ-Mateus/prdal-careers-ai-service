@@ -31,8 +31,10 @@ SYSTEM_TURNO = (
     "pedir respostas de formulario, pergunte ou use os nomes dos campos e chame "
     "redigir_respostas_formulario. Entregue o texto para revisao e nunca trate "
     "redacao como envio ou candidatura concluida. "
-    "curriculo: primeiro, registrar ou revisar a vaga; depois, iniciar "
-    "gerar_curriculo uma unica vez; por fim, consultar status_geracao usando o "
+    "curriculo: primeiro, registrar ou revisar a vaga; depois, chamar analisar_ats "
+    "para concluir a Etapa 1 - Analise ATS. A API vai pedir confirmacao explicita "
+    "do candidato antes de iniciar gerar_curriculo uma unica vez, que corresponde a "
+    "Etapa 2 - Reescrita otimizada; por fim, consultar status_geracao usando o "
     "jobId retornado e, somente quando o status for CONCLUIDA, chamar "
     "buscar_curriculo com o curriculoId para ler o curriculo, score e breakdown "
     "final. Nao avance para mensagem, formulario, candidatura ou proximo passo "
@@ -72,7 +74,7 @@ SYSTEM_TURNO = (
 
 _FERRAMENTAS_INTERNAS = (
     "listar_oportunidades|buscar_oportunidade|abrir_workspace|ler_timeline|"
-    "listar_acoes|ler_perfil|listar_curriculos|buscar_curriculo|status_geracao|"
+    "listar_acoes|ler_perfil|listar_curriculos|buscar_curriculo|status_geracao|analisar_ats|"
     "listar_banco_vagas|ler_agenda|registrar_oportunidade|ativar_entrada|"
     "ativar_banco_vaga|gerar_curriculo|editar_curriculo|definir_proximo_passo|"
     "concluir_passo|mover_estagio|registrar_candidatura|atualizar_candidatura|"
@@ -119,7 +121,7 @@ def _regerar_por_perfil_atualizado(req: TurnRequest) -> TurnResponse | None:
     if ultima.papel == "tool" and ultima.tool == "ler_perfil":
         return TurnResponse(
             tipo="tool_call",
-            tool="gerar_curriculo",
+            tool="analisar_ats",
             args={"oportunidadeId": req.oportunidade_id},
         )
     return TurnResponse(tipo="tool_call", tool="ler_perfil")
