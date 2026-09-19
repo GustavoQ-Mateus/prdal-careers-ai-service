@@ -20,6 +20,10 @@ SKILL_RE = re.compile(r"^-\s*([^:]+):\s*(.+)$")
 BULLET_RE = re.compile(r"^-\s+(.+)$")
 FORMULA_LABEL_RE = re.compile(r"\bresultado\s*:", re.IGNORECASE)
 FORMULA_LEAK_TERMS = ("ferramenta por extenso", "resultado real", "verbo de acao")
+PONTUACAO_ASCII = {
+    0x2010: "-", 0x2011: "-", 0x2012: "-", 0x2013: "-",
+    0x2014: "-", 0x2015: "-", 0x2212: "-",
+}
 
 
 class KeywordsUnavailable(ValueError):
@@ -457,7 +461,7 @@ def _normalizar_cabecalhos(texto: str, req: GenerateCvRequest) -> str:
 
 
 def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
-    texto = markdown.replace("—", "-").replace("–", "-")
+    texto = markdown.translate(PONTUACAO_ASCII)
     texto = "\n".join(re.sub(r"[ \t]+", " ", linha).rstrip() for linha in texto.splitlines())
     linhas = _normalizar_cabecalhos(texto, req).strip().splitlines()
     if linhas and linhas[0].startswith("# ") and " | " in linhas[0]:
