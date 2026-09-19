@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from typing import TypeVar
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
+DEFAULT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_STRICT_MODELS = frozenset(
     {
         "openai/gpt-oss-20b",
@@ -16,6 +18,8 @@ DEFAULT_STRICT_MODELS = frozenset(
         "qwen/qwen3.8-27b",
     }
 )
+
+logger = logging.getLogger(__name__)
 
 
 class LLMUnavailable(Exception):
@@ -39,7 +43,7 @@ def _client_and_model() -> tuple[OpenAI, str]:
         base_url="https://api.groq.com/openai/v1",
         api_key=os.getenv("GROQ_API_KEY", ""),
         timeout=_env_float("AI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS),
-    ), os.getenv("AI_MODEL", "openai/gpt-oss-120b")
+    ), os.getenv("AI_MODEL", DEFAULT_MODEL)
 
 
 def _supports_reasoning_effort(model: str) -> bool:
@@ -80,10 +84,24 @@ def _strict_schema(valor: object, obrigatorio: bool = True) -> object:
     return resultado
 
 
+def _tem_mapa_dinamico(valor: object) -> bool:
+    if isinstance(valor, list):
+        return any(_tem_mapa_dinamico(item) for item in valor)
+    if not isinstance(valor, dict):
+        return False
+    if valor.get("type") == "object":
+        if valor.get("additionalProperties") is True:
+            return True
+        if "properties" not in valor and "additionalProperties" not in valor:
+            return True
+    return any(_tem_mapa_dinamico(item) for item in valor.values())
+
+
 def _response_format(model: str, schema: type[T]) -> dict[str, object]:
     modo = os.getenv("AI_JSON_SCHEMA_MODE", "auto").lower()
     usar_strict = modo == "strict" or (modo == "auto" and model.lower() in _strict_models())
-    if not usar_strict or modo == "object":
+    schema_original = schema.model_json_schema()
+    if not usar_strict or modo == "object" or _tem_mapa_dinamico(schema_original):
         return {"type": "json_object"}
     nome = re.sub(r"[^a-zA-Z0-9_-]+", "_", schema.__name__) or "response"
     return {
@@ -91,7 +109,7 @@ def _response_format(model: str, schema: type[T]) -> dict[str, object]:
         "json_schema": {
             "name": nome,
             "strict": True,
-            "schema": _strict_schema(schema.model_json_schema()),
+            "schema": _strict_schema(schema_original),
         },
     }
 
@@ -133,6 +151,14 @@ def complete_model(
             return schema.model_validate(json.loads(content))
         except Exception as exc:
             last = exc
+            logger.warning(
+                "falha na chamada estruturada do modelo model=%s tentativa=%s formato=%s tipo=%s erro=%s",
+                model,
+                tentativa + 1,
+                "json_object" if strict_fallback else "json_schema",
+                type(exc).__name__,
+                str(exc),
+            )
             if (
                 tentativa == 0
                 and not strict_fallback
