@@ -22,6 +22,10 @@ FORMULA_LABEL_RE = re.compile(r"\bresultado\s*:", re.IGNORECASE)
 FORMULA_LEAK_TERMS = ("ferramenta por extenso", "resultado real", "verbo de acao")
 
 
+class KeywordsUnavailable(ValueError):
+    pass
+
+
 def _repo_root() -> Path:
     atual = Path(__file__).resolve()
     for path in [Path.cwd(), *atual.parents]:
@@ -639,6 +643,10 @@ def generate_cv(req: GenerateCvRequest) -> str:
 
 
 def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
+    if not req.keywords:
+        raise KeywordsUnavailable(
+            "extracao de keywords pendente; tente novamente antes de gerar o curriculo"
+        )
     base = _deterministic_request(req)
     inicial = _analise(base, req)
     degradacao = None

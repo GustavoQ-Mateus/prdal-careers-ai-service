@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
-from .generate import generate_cv, generate_cv_pipeline
+from .generate import KeywordsUnavailable, generate_cv, generate_cv_pipeline
 from .keywords import extract_keywords
 from .llm import LLMUnavailable
 from .rag import consultar, indexar, substituir
@@ -87,17 +87,30 @@ async def hello() -> HelloResponse:
 
 @app.post("/keywords", response_model=KeywordsResponse)
 def keywords(req: KeywordsRequest) -> KeywordsResponse:
-    return KeywordsResponse(keywords=extract_keywords(req.descricao))
+    try:
+        return KeywordsResponse(keywords=extract_keywords(req.descricao))
+    except LLMUnavailable as exc:
+        return KeywordsResponse(
+            keywords=[],
+            status="PENDENTE",
+            degradacao=f"Extracao de keywords indisponivel: {exc}",
+        )
 
 
 @app.post("/generate-cv", response_model=GenerateCvResponse)
 def generate(req: GenerateCvRequest) -> GenerateCvResponse:
-    return GenerateCvResponse(markdown=generate_cv(req))
+    try:
+        return GenerateCvResponse(markdown=generate_cv(req))
+    except KeywordsUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/generate-cv-pipeline", response_model=GeneratePipelineResponse)
 def generate_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
-    return generate_cv_pipeline(req)
+    try:
+        return generate_cv_pipeline(req)
+    except KeywordsUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/score", response_model=ScoreResponse)
@@ -144,11 +157,17 @@ def copiloto_turn(req: TurnRequest) -> TurnResponse:
 def copiloto_redigir_mensagem(
     req: RedigirMensagemRequest,
 ) -> RedigirMensagemResponse:
-    return redigir_mensagem(req)
+    try:
+        return redigir_mensagem(req)
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"redacao indisponivel: {exc}") from exc
 
 
 @app.post("/copiloto/redigir-formulario", response_model=RedigirFormularioResponse)
 def copiloto_redigir_formulario(
     req: RedigirFormularioRequest,
 ) -> RedigirFormularioResponse:
-    return redigir_formulario(req)
+    try:
+        return redigir_formulario(req)
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"redacao indisponivel: {exc}") from exc

@@ -9,7 +9,6 @@ from .schemas import (
     RedigirFormularioResponse,
     RedigirMensagemRequest,
     RedigirMensagemResponse,
-    RespostaFormulario,
     TurnRequest,
     TurnResponse,
     Vaga,
@@ -66,7 +65,6 @@ SYSTEM_TURNO = (
     "Use tipo texto quando for so conversar e tipo tool_call quando acionar uma tool."
 )
 
-_DIRETIVA = re.compile(r"^\s*tool\s+([a-z_]+)\s*(\{.*\})?\s*$", re.IGNORECASE | re.DOTALL)
 _FERRAMENTAS_INTERNAS = (
     "listar_oportunidades|buscar_oportunidade|abrir_workspace|ler_timeline|"
     "listar_acoes|ler_perfil|listar_curriculos|buscar_curriculo|status_geracao|"
@@ -214,30 +212,6 @@ def _user(req: TurnRequest) -> str:
     )
 
 
-def _fallback(req: TurnRequest) -> TurnResponse:
-    ultima = req.mensagens[-1] if req.mensagens else None
-    if ultima and ultima.papel == "user":
-        m = _DIRETIVA.match(ultima.conteudo)
-        if m:
-            nome = m.group(1).lower()
-            nomes = {t.nome for t in req.tools}
-            if nome in nomes:
-                args = {}
-                if m.group(2):
-                    try:
-                        args = json.loads(m.group(2))
-                    except json.JSONDecodeError:
-                        args = {}
-                return TurnResponse(tipo="tool_call", tool=nome, args=args)
-        return TurnResponse(
-            tipo="texto",
-            texto=(
-                "O copiloto esta indisponivel no momento. Tente novamente em instantes."
-            ),
-        )
-    raise LLMUnavailable("copiloto indisponivel no momento")
-
-
 def planejar_turno(req: TurnRequest) -> TurnResponse:
     regeracao = _regerar_por_perfil_atualizado(req)
     if regeracao:
@@ -254,7 +228,7 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
                 return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or "", req))
             return res
     except LLMUnavailable:
-        return _fallback(req)
+        raise
 
 
 SYSTEM_MENSAGEM = (
@@ -291,17 +265,7 @@ def redigir_mensagem(req: RedigirMensagemRequest) -> RedigirMensagemResponse:
         if res.texto.strip():
             return res
     except LLMUnavailable:
-        pass
-    nome = req.perfil.nome or "o candidato"
-    texto = (
-        f"Ola, tenho interesse na vaga de {req.vaga.titulo} na {req.vaga.empresa}. "
-        f"{req.perfil.resumo} Fico a disposicao para conversar. Obrigado."
-    ).strip()
-    return RedigirMensagemResponse(
-        titulo=f"Mensagem ao recrutador de {req.vaga.titulo}",
-        texto=texto,
-        destino=f"recrutador de {req.vaga.empresa}",
-    )
+        raise
 
 
 SYSTEM_FORMULARIO = (
@@ -326,17 +290,4 @@ def redigir_formulario(req: RedigirFormularioRequest) -> RedigirFormularioRespon
         if res.respostas:
             return res
     except LLMUnavailable:
-        pass
-    respostas = [
-        RespostaFormulario(
-            campo=c,
-            texto=f"{req.perfil.resumo}".strip() or "Resposta a revisar.",
-        )
-        for c in req.campos
-    ]
-    texto = "\n\n".join(f"{r.campo}\n{r.texto}" for r in respostas)
-    return RedigirFormularioResponse(
-        titulo=f"Respostas para {req.vaga.titulo}",
-        respostas=respostas,
-        texto=texto,
-    )
+        raise

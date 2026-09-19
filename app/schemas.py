@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic.alias_generators import to_camel
@@ -17,8 +17,14 @@ class KeywordsRequest(CamelModel):
     descricao: str
 
 
+class KeywordsLlmResponse(CamelModel):
+    keywords: list[Keyword]
+
+
 class KeywordsResponse(CamelModel):
     keywords: list[Keyword]
+    status: Literal["VALIDAS", "PENDENTE"] = "VALIDAS"
+    degradacao: str | None = None
 
 
 class Vaga(CamelModel):
