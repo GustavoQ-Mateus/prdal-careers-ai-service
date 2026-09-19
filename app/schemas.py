@@ -11,6 +11,13 @@ class CamelModel(BaseModel):
 class Keyword(CamelModel):
     termo: str
     peso: float
+    tipo: Literal["stack", "ferramenta", "metodologia", "dominio_negocio", "certificacao"] | None = None
+
+
+class KeywordLlm(CamelModel):
+    termo: str
+    peso: float
+    tipo: Literal["stack", "ferramenta", "metodologia", "dominio_negocio", "certificacao"]
 
 
 class KeywordsRequest(CamelModel):
@@ -18,7 +25,7 @@ class KeywordsRequest(CamelModel):
 
 
 class KeywordsLlmResponse(CamelModel):
-    keywords: list[Keyword]
+    keywords: list[KeywordLlm]
 
 
 class KeywordsResponse(CamelModel):
