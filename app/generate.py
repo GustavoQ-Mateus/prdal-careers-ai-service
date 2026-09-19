@@ -281,6 +281,43 @@ def _periodo_mm_aaaa(periodo: str, idioma: str) -> str:
     return re.sub(r"\s*[–—]\s*", " - ", texto)
 
 
+ATUAL_TERMOS = ("atual", "present", "actual")
+
+
+def _parse_periodo(periodo: str) -> tuple[bool, tuple[int, int] | None, tuple[int, int] | None]:
+    datas = [(int(ano), int(mes)) for mes, ano in re.findall(r"(\d{2})/(\d{4})", periodo)]
+    inicio = datas[0] if datas else None
+    atual = any(termo in _sem_acentos(periodo) for termo in ATUAL_TERMOS)
+    if atual:
+        return True, inicio, None
+    fim = datas[1] if len(datas) > 1 else inicio
+    return False, inicio, fim
+
+
+def _chave_recencia(periodo: str) -> tuple[int, tuple[int, int], tuple[int, int]]:
+    atual, inicio, fim = _parse_periodo(periodo)
+    inicio = inicio or (0, 0)
+    return (1 if atual else 0, inicio if atual else (fim or inicio), inicio)
+
+
+def _nucleo_empresa(empresa: str) -> str:
+    return re.split(r"\s*[·|,\-–—/]\s*", empresa.strip(), maxsplit=1)[0].strip()
+
+
+def _experiencia_atual(experiencia: ExperienciaPerfil) -> bool:
+    return _parse_periodo(experiencia.periodo)[0]
+
+
+def _ordenar_experiencias(
+    experiencias: list[ExperienciaPerfil], idioma: str
+) -> list[ExperienciaPerfil]:
+    return sorted(
+        experiencias,
+        key=lambda e: _chave_recencia(_periodo_mm_aaaa(e.periodo, idioma)),
+        reverse=True,
+    )
+
+
 def _texto_perfil(perfil: PerfilMestre) -> str:
     partes = [
         perfil.nome, str(perfil.contato), perfil.resumo,
@@ -422,7 +459,7 @@ def _deterministic_request(req: GenerateCvRequest) -> str:
         linhas.append(f"- {categoria}: {', '.join(valores)}")
 
     linhas += ["", f"## {h['experiencia']}"]
-    for indice, experiencia in enumerate(perfil.experiencias[:3]):
+    for indice, experiencia in enumerate(_ordenar_experiencias(perfil.experiencias, idioma)[:3]):
         empresa = experiencia.empresa or "Empresa"
         cargo = experiencia.cargo or "Cargo"
         periodo = _periodo_mm_aaaa(experiencia.periodo, idioma) or "periodo nao informado"
@@ -572,12 +609,57 @@ def _erros_coerencia(markdown: str, req: GenerateCvRequest) -> list[str]:
     return ["resumo profissional sem vocabulario em comum com a vaga"]
 
 
+def _erros_completude(markdown: str, req: GenerateCvRequest) -> list[str]:
+    experiencias = req.perfil_mestre.experiencias
+    if not experiencias:
+        return []
+    h = _cabecalhos(_idioma(req))
+    secao = _secao(markdown, h["experiencia"])
+    if len(experiencias) <= 3:
+        faltando = [
+            e.empresa
+            for e in experiencias
+            if e.empresa.strip() and not _termo_presente(_nucleo_empresa(e.empresa), secao)
+        ]
+        if faltando:
+            return ["experiencia do perfil-mestre ausente na saida: " + ", ".join(faltando)]
+        return []
+    faltando = [
+        e.empresa
+        for e in experiencias
+        if _experiencia_atual(e)
+        and e.empresa.strip()
+        and not _termo_presente(_nucleo_empresa(e.empresa), secao)
+    ]
+    if faltando:
+        return ["experiencia mais recente do perfil-mestre omitida: " + ", ".join(faltando)]
+    return []
+
+
+def _erros_ordem(markdown: str, req: GenerateCvRequest) -> list[str]:
+    h = _cabecalhos(_idioma(req))
+    secao = _secao(markdown, h["experiencia"])
+    chaves = [
+        _chave_recencia(m.group(3))
+        for linha in secao.splitlines()
+        if (m := JOB_HEADER_RE.match(linha.strip()))
+    ]
+    if len(chaves) < 2 or chaves == sorted(chaves, reverse=True):
+        return []
+    return [
+        "experiencias fora de ordem cronologica reversa; liste a mais recente "
+        "primeiro e mantenha a experiencia atual antes das ja encerradas"
+    ]
+
+
 def _erros_saida(markdown: str, req: GenerateCvRequest) -> list[str]:
     return [
         *_erros_contrato(markdown, req),
         *_erros_factualidade(markdown, req),
         *_erros_formula(markdown),
         *_erros_coerencia(markdown, req),
+        *_erros_completude(markdown, req),
+        *_erros_ordem(markdown, req),
     ]
 
 
