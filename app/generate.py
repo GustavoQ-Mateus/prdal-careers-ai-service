@@ -655,6 +655,32 @@ def _erros_factualidade(markdown: str, req: GenerateCvRequest) -> list[str]:
     ]
 
 
+METRICA_RE = re.compile(
+    r"\b(\d+(?:[.,]\d+)?)\s*(%|x|vezes|dias|horas|semanas|meses|anos|modulos|módulos)"
+    r"(?![a-zA-Z0-9])",
+    re.IGNORECASE,
+)
+
+
+def _erros_metricas(markdown: str, req: GenerateCvRequest) -> list[str]:
+    fonte = _fonte_factual(req)
+    invencoes = set()
+    for match in METRICA_RE.finditer(markdown):
+        numero, unidade = match.group(1), match.group(2)
+        padrao_fonte = re.compile(
+            rf"{re.escape(numero)}\s*{re.escape(unidade)}(?![a-zA-Z0-9])",
+            re.IGNORECASE,
+        )
+        if not padrao_fonte.search(fonte):
+            invencoes.add(f"{numero}{unidade}")
+    if not invencoes:
+        return []
+    return [
+        "metrica numerica sem fonte factual no perfil/contexto do usuario: "
+        + ", ".join(sorted(invencoes))
+    ]
+
+
 def _erros_formula(markdown: str) -> list[str]:
     normalizado = normalize(markdown)
     vazamentos = [termo for termo in FORMULA_LEAK_TERMS if termo in normalizado]
@@ -728,6 +754,7 @@ def _erros_saida(markdown: str, req: GenerateCvRequest) -> list[str]:
     return [
         *_erros_contrato(markdown, req),
         *_erros_factualidade(markdown, req),
+        *_erros_metricas(markdown, req),
         *_erros_formula(markdown),
         *_erros_coerencia(markdown, req),
         *_erros_completude(markdown, req),

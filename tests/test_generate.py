@@ -9,6 +9,7 @@ from app.generate import (
     _erros_coerencia,
     _erros_factualidade,
     _erros_formula,
+    _erros_metricas,
     _erros_ordem,
     _erros_saida,
     _limpar_markdown,
@@ -470,6 +471,40 @@ class RetryPrescritivoTest(unittest.TestCase):
 
         self.assertEqual(2, mock_complete.call_count)
         self.assertIsNotNone(resultado.degradacao)
+
+
+class ErrosMetricasTest(unittest.TestCase):
+    def setUp(self):
+        self.req = _req_tres_experiencias()
+
+    def test_rejeita_percentual_inventado_sem_fonte_factual(self):
+        # caso real observado com gpt-oss-120b: metrica "~40%" sem fonte
+        markdown = "- Reduzi o tempo de processamento em cerca de ~40% usando Java."
+        erros = _erros_metricas(markdown, self.req)
+
+        self.assertTrue(erros)
+        self.assertIn("40%", erros[0])
+
+    def test_aceita_percentual_com_correspondencia_literal_no_contexto(self):
+        req = self.req.model_copy(deep=True)
+        req.contexto = ["Reduzi o tempo de processamento em 40% no ultimo trimestre."]
+        markdown = "- Reduzi o tempo de processamento em 40% usando Java."
+
+        self.assertEqual([], _erros_metricas(markdown, req))
+
+    def test_aceita_multiplicador_presente_no_perfil_mestre(self):
+        req = self.req.model_copy(deep=True)
+        req.perfil_mestre.experiencias[0].descricao += (
+            "\n- Aumentei a velocidade de resposta da API em 3x."
+        )
+        markdown = "- Aumentei a velocidade de resposta da API em 3x."
+
+        self.assertEqual([], _erros_metricas(markdown, req))
+
+    def test_sem_padrao_numerico_nao_gera_erro(self):
+        self.assertEqual(
+            [], _erros_metricas("- Atuei em modulos ERP com Java.", self.req)
+        )
 
 
 if __name__ == "__main__":
