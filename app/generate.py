@@ -1,3 +1,4 @@
+import logging
 import re
 import unicodedata
 from pathlib import Path
@@ -104,6 +105,10 @@ def _user(
         f"{lacunas_texto}\n"
         "Meta: overlap de vocabulario com a vaga >= 60%, sem keyword stuffing e "
         "sem secao 'palavras-chave'.\n\n"
+        "Tailoring real: cada frase do resumo cita fato concreto, proibido RH "
+        "generico sem fato. Abra cada experiencia pelo bullet mais aderente a "
+        "vaga, sem mover tecnologia para experiencia onde nao foi usada nem "
+        "apagar o bullet de maior responsabilidade tecnica ja registrada.\n\n"
         "Contrato obrigatorio do Markdown:\n"
         "- Primeira linha: '# NOME'. Segunda linha util: '**Titulo profissional**'. "
         "Depois, uma unica linha de contato no corpo. Nome e titulo nunca ficam na "
@@ -497,9 +502,27 @@ def _normalizar_cabecalhos(texto: str, req: GenerateCvRequest) -> str:
     return "\n".join(linhas)
 
 
+def _normalizar_cabecalho_experiencia(texto: str) -> str:
+    linhas = []
+    for linha in texto.splitlines():
+        bruta = linha.strip()
+        m = re.match(r"^#{1,6}\s+(.+)$", bruta)
+        conteudo = m.group(1).strip() if m else bruta
+        partes = conteudo.split("|")
+        if m and len(partes) == 3:
+            primeira = partes[0].strip()
+            if not (primeira.startswith("**") and primeira.endswith("**")):
+                primeira = f"**{primeira.strip('*').strip()}**"
+            linhas.append(" | ".join([primeira, partes[1].strip(), partes[2].strip()]))
+        else:
+            linhas.append(linha)
+    return "\n".join(linhas)
+
+
 def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
     texto = markdown.translate(PONTUACAO_ASCII)
     texto = "\n".join(re.sub(r"[ \t]+", " ", linha).rstrip() for linha in texto.splitlines())
+    texto = _normalizar_cabecalho_experiencia(texto)
     linhas = _normalizar_cabecalhos(texto, req).strip().splitlines()
     if linhas and linhas[0].startswith("# ") and " | " in linhas[0]:
         nome, titulo = linhas[0][2:].split(" | ", 1)
@@ -748,9 +771,13 @@ def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
     erros = []
     try:
         lacunas = _lacunas_autorizadas(inicial, req)
-        for _ in range(2):
+        for tentativa in range(2):
             markdown = _gerar_llm(req, inicial, lacunas, erros=erros)
             erros = _erros_saida(markdown, req) if markdown else ["resposta vazia"]
+            if erros:
+                logging.getLogger(__name__).warning(
+                    "reescrita rejeitada tentativa=%s erros=%s", tentativa + 1, erros
+                )
             if not erros:
                 break
         if erros:
