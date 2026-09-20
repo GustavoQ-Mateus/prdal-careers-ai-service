@@ -521,6 +521,24 @@ def _normalizar_cabecalho_experiencia(texto: str, req: GenerateCvRequest) -> str
     return "\n".join(linhas)
 
 
+def _texto_chave(linha: str) -> str:
+    sem_heading = re.sub(r"^#{1,6}\s*", "", linha.strip())
+    sem_negrito = sem_heading.strip("* ").strip()
+    return _sem_acentos(re.sub(r"[^\w\s]", "", sem_negrito))
+
+
+def _remover_titulo_duplicado(linhas: list[str]) -> list[str]:
+    uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
+    if len(uteis) < 3:
+        return linhas
+    titulo_idx, proximo_idx = uteis[1], uteis[2]
+    if not linhas[proximo_idx].strip().startswith("#"):
+        return linhas
+    if _texto_chave(linhas[proximo_idx]) != _texto_chave(linhas[titulo_idx]):
+        return linhas
+    return linhas[:proximo_idx] + linhas[proximo_idx + 1:]
+
+
 def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
     texto = markdown.translate(PONTUACAO_ASCII)
     texto = "\n".join(re.sub(r"[ \t]+", " ", linha).rstrip() for linha in texto.splitlines())
@@ -535,6 +553,7 @@ def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
     uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
     if len(uteis) >= 2 and req.vaga.titulo:
         linhas[uteis[1]] = f"**{_titulo_vaga_seguro(req.vaga.titulo, req)}**"
+    linhas = _remover_titulo_duplicado(linhas)
     contato = _linha_contato(req.perfil_mestre.contato)
     uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
     if len(uteis) >= 3 and contato and not linhas[uteis[2]].startswith("#"):

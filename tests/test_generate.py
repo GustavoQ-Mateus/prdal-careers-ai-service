@@ -361,6 +361,51 @@ class NormalizacaoCabecalhoExperienciaTest(unittest.TestCase):
         self.assertNotIn("Jun.", limpo)
         self.assertEqual([], _erros_contrato(limpo, self.req))
 
+    def test_heading_duplicando_titulo_e_removido_antes_do_contato(self):
+        # amostra real da ADR 0033: heading duplica o titulo antes da linha de contato
+        markdown = (
+            "# Gustavo Queiroz Mateus\n"
+            "**Desenvolvedor BackEnd Java Jr**\n"
+            "## **Desenvolvedor BackEnd Java Jr**\n"
+            "https://github.com/GustavoQ-Mateus | "
+            "[linkedin.com/in/gustavo-queiroz-mateus-935255283]"
+            "(https://linkedin.com/in/gustavo-queiroz-mateus-935255283) | "
+            "+55 85 99120-7171 | gustavoqueirozunifor@edu.unifor.br\n\n"
+            "## RESUMO PROFISSIONAL\nDesenvolvedor back-end Java.\n\n"
+            "## COMPETÊNCIAS\n- Linguagens: Java\n\n"
+            "## EXPERIÊNCIA PROFISSIONAL\n"
+            "**Micro&Money** | Estagio Full-Stack | 01/2026 - 04/2026\n"
+            "- Atuei em modulos ERP com Java (Spring Boot).\n\n"
+            "## FORMAÇÃO ACADÊMICA\nUNIFOR\n\n"
+            "## CERTIFICAÇÕES\n\n## IDIOMAS\nPortuguês, nativo\n"
+        )
+        limpo = _limpar_markdown(markdown, self.req)
+        linhas_uteis = [linha for linha in limpo.splitlines() if linha.strip()]
+
+        self.assertNotIn("## **Desenvolvedor BackEnd Java Jr**", limpo)
+        self.assertFalse(linhas_uteis[2].startswith("#"))
+        self.assertEqual([], _erros_contrato(limpo, self.req))
+
+    def test_titulo_duplicado_com_variacao_de_case_e_pontuacao_e_removido(self):
+        markdown = (
+            "# Gustavo Queiroz Mateus\n"
+            "**Desenvolvedor BackEnd Java Jr**\n"
+            "### desenvolvedor backend java jr.\n"
+            "+55 85 99120-7171 | gustavoqueirozunifor@edu.unifor.br\n\n"
+            "## RESUMO PROFISSIONAL\nDesenvolvedor back-end Java.\n\n"
+            "## COMPETÊNCIAS\n- Linguagens: Java\n\n"
+            "## EXPERIÊNCIA PROFISSIONAL\n"
+            "**Micro&Money** | Estagio Full-Stack | 01/2026 - 04/2026\n"
+            "- Atuei em modulos ERP com Java (Spring Boot).\n\n"
+            "## FORMAÇÃO ACADÊMICA\nUNIFOR\n\n"
+            "## CERTIFICAÇÕES\n\n## IDIOMAS\nPortuguês, nativo\n"
+        )
+        limpo = _limpar_markdown(markdown, self.req)
+        linhas_uteis = [linha for linha in limpo.splitlines() if linha.strip()]
+
+        self.assertFalse(linhas_uteis[2].startswith("#"))
+        self.assertEqual([], _erros_contrato(limpo, self.req))
+
 
 if __name__ == "__main__":
     unittest.main()
