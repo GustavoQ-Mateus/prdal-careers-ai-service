@@ -43,6 +43,14 @@ def _env_float(nome: str, fallback: float) -> float:
     return valor if valor > 0 else fallback
 
 
+_FENCE_JSON_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
+
+
+def _sem_fence_markdown(content: str) -> str:
+    match = _FENCE_JSON_RE.match(content.strip())
+    return match.group(1).strip() if match else content
+
+
 def _client_and_model() -> tuple[OpenAI, str]:
     if _provider() == "openrouter":
         return OpenAI(
@@ -200,7 +208,7 @@ def complete_model(
             if provider == "groq" and _supports_reasoning_effort(model):
                 params["reasoning_effort"] = reasoning_effort
             resp = client.chat.completions.create(**params)
-            content = resp.choices[0].message.content or "{}"
+            content = _sem_fence_markdown(resp.choices[0].message.content or "{}")
             return schema.model_validate(json.loads(content))
         except Exception as exc:
             last = exc
