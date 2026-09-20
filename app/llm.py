@@ -28,9 +28,6 @@ class LLMUnavailable(Exception):
 
 PROVEDORES_SUPORTADOS = frozenset({"groq", "openrouter", "anthropic"})
 
-# claude-opus-4-8: id mais recente e documentado da linha Opus no momento da
-# implementacao da ADR 0033 (2026-09-20). Ultimo recurso, so ativa com
-# ANTHROPIC_API_KEY no ambiente.
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
 
 

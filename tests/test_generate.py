@@ -321,7 +321,6 @@ class NormalizacaoCabecalhoExperienciaTest(unittest.TestCase):
         self.req = _req_tres_experiencias()
 
     def test_cabecalho_com_quatro_campos_e_mes_abreviado_e_normalizado(self):
-        # amostra real da ADR 0033: cargo | empresa | "Jun. 2026 a atual" | local
         linha_real = (
             "### **Desenvolvedor Full-Stack** | Modera Road Inspector | "
             "Jun. 2026 a atual | Pernambuco"
@@ -365,7 +364,6 @@ class NormalizacaoCabecalhoExperienciaTest(unittest.TestCase):
         self.assertEqual([], _erros_contrato(limpo, self.req))
 
     def test_heading_duplicando_titulo_e_removido_antes_do_contato(self):
-        # amostra real da ADR 0033: heading duplica o titulo antes da linha de contato
         markdown = (
             "# Gustavo Queiroz Mateus\n"
             "**Desenvolvedor BackEnd Java Jr**\n"
@@ -478,7 +476,6 @@ class ErrosMetricasTest(unittest.TestCase):
         self.req = _req_tres_experiencias()
 
     def test_rejeita_percentual_inventado_sem_fonte_factual(self):
-        # caso real observado com gpt-oss-120b: metrica "~40%" sem fonte
         markdown = "- Reduzi o tempo de processamento em cerca de ~40% usando Java."
         erros = _erros_metricas(markdown, self.req)
 
