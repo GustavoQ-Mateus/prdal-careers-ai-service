@@ -81,6 +81,32 @@ def _json_model(model: Any) -> str:
     return model.model_dump_json(by_alias=True) if hasattr(model, "model_dump_json") else str(model)
 
 
+EXEMPLO_ERRO_FORMATO = {
+    "cabecalho de nome invalido": "formato exigido: '# Nome Completo' sozinho na primeira linha, sem '|'",
+    "titulo profissional ausente": "formato exigido: '**Titulo Profissional**' sozinho na segunda linha, em negrito, sem heading",
+    "linha de contato ausente": "formato exigido: uma unica linha de contato na terceira linha util, sem comecar com #",
+    "ordem de secoes invalida": "formato exigido: as secoes na ordem exata pedida, sem repetir nem inverter nenhuma",
+    "cabecalho de experiencia invalido": "formato exigido: '**Empresa** | Cargo | MM/AAAA - MM/AAAA' (ou 'atual'), uma linha, sem #",
+}
+
+ERROS_FORMATO_MECANICO = tuple(EXEMPLO_ERRO_FORMATO)
+
+
+def _apenas_erro_formato_mecanico(erros: list[str]) -> bool:
+    return bool(erros) and all(
+        any(erro.startswith(prefixo) for prefixo in ERROS_FORMATO_MECANICO)
+        for erro in erros
+    )
+
+
+def _formatar_erro_reparo(erro: str, prescritivo: bool) -> str:
+    if prescritivo:
+        for prefixo, exemplo in EXEMPLO_ERRO_FORMATO.items():
+            if erro.startswith(prefixo):
+                return f"- {erro} ({exemplo})"
+    return f"- {erro}"
+
+
 def _user(
     req: GenerateCvRequest,
     analise_inicial: AtsAnalysis,
@@ -90,7 +116,9 @@ def _user(
 ) -> str:
     termos = ", ".join(k.termo for k in req.keywords)
     lacunas_texto = ", ".join(lacunas) if lacunas else "nenhuma lacuna factual autorizada"
-    reparos = "\n".join(f"- {erro}" for erro in (erros or [])) or "- nenhum"
+    erros = erros or []
+    prescritivo = _apenas_erro_formato_mecanico(erros)
+    reparos = "\n".join(_formatar_erro_reparo(erro, prescritivo) for erro in erros) or "- nenhum"
     titulo_seguro = _titulo_vaga_seguro(req.vaga.titulo, req)
     h = _cabecalhos(_idioma(req))
     secoes_obrigatorias = " -> ".join(f"## {secao}" for secao in h.values())
@@ -792,14 +820,19 @@ def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
     erros = []
     try:
         lacunas = _lacunas_autorizadas(inicial, req)
-        for tentativa in range(2):
+        tentativa = 0
+        max_tentativas = 2
+        while True:
             markdown = _gerar_llm(req, inicial, lacunas, erros=erros)
             erros = _erros_saida(markdown, req) if markdown else ["resposta vazia"]
+            tentativa += 1
             if erros:
                 logging.getLogger(__name__).warning(
-                    "reescrita rejeitada tentativa=%s erros=%s", tentativa + 1, erros
+                    "reescrita rejeitada tentativa=%s erros=%s", tentativa, erros
                 )
-            if not erros:
+                if _apenas_erro_formato_mecanico(erros):
+                    max_tentativas = max(max_tentativas, 3)
+            if not erros or tentativa >= max_tentativas:
                 break
         if erros:
             markdown = base

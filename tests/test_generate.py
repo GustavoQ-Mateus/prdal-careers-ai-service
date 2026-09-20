@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from app.generate import (
     _deterministic_request,
+    _apenas_erro_formato_mecanico,
     _erros_completude,
     _erros_contrato,
     _erros_coerencia,
@@ -13,6 +14,7 @@ from app.generate import (
     _limpar_markdown,
     _linha_contato,
     _normalizar_cabecalho_experiencia,
+    _user,
     analisar_ats,
     generate_cv_pipeline,
     reduzir_curriculo,
@@ -405,6 +407,69 @@ class NormalizacaoCabecalhoExperienciaTest(unittest.TestCase):
 
         self.assertFalse(linhas_uteis[2].startswith("#"))
         self.assertEqual([], _erros_contrato(limpo, self.req))
+
+
+class RetryPrescritivoTest(unittest.TestCase):
+    def setUp(self):
+        self.req = _req_tres_experiencias()
+        self.analise = analisar_ats(self.req)
+
+    def test_apenas_erro_formato_mecanico_identifica_corretamente(self):
+        self.assertTrue(_apenas_erro_formato_mecanico(["linha de contato ausente"]))
+        self.assertTrue(
+            _apenas_erro_formato_mecanico(
+                ["cabecalho de experiencia invalido", "ordem de secoes invalida"]
+            )
+        )
+        self.assertFalse(
+            _apenas_erro_formato_mecanico(
+                [
+                    "linha de contato ausente",
+                    "tecnologia sem fonte factual no perfil/contexto do usuario: django",
+                ]
+            )
+        )
+        self.assertFalse(_apenas_erro_formato_mecanico([]))
+
+    def test_user_inclui_exemplo_quando_erro_e_apenas_formato_mecanico(self):
+        prompt = _user(
+            self.req, self.analise, [], erros=["cabecalho de experiencia invalido"]
+        )
+        self.assertIn("formato exigido", prompt)
+
+    def test_user_nao_inclui_exemplo_quando_erro_de_conteudo(self):
+        prompt = _user(
+            self.req,
+            self.analise,
+            [],
+            erros=["tecnologia sem fonte factual no perfil/contexto do usuario: django"],
+        )
+        self.assertNotIn("formato exigido", prompt)
+
+    @patch("app.generate._erros_saida", return_value=["linha de contato ausente"])
+    @patch("app.generate.complete_model")
+    def test_pipeline_tenta_ate_3_vezes_para_erro_de_formato_mecanico(
+        self, mock_complete, _erros
+    ):
+        mock_complete.return_value = GenerateCvResponse(markdown="# x\n**y**\nz\n")
+        resultado = generate_cv_pipeline(self.req)
+
+        self.assertEqual(3, mock_complete.call_count)
+        self.assertIsNotNone(resultado.degradacao)
+
+    @patch(
+        "app.generate._erros_saida",
+        return_value=["tecnologia sem fonte factual no perfil/contexto do usuario: django"],
+    )
+    @patch("app.generate.complete_model")
+    def test_pipeline_mantem_2_tentativas_para_erro_de_conteudo(
+        self, mock_complete, _erros
+    ):
+        mock_complete.return_value = GenerateCvResponse(markdown="# x\n**y**\nz\n")
+        resultado = generate_cv_pipeline(self.req)
+
+        self.assertEqual(2, mock_complete.call_count)
+        self.assertIsNotNone(resultado.degradacao)
 
 
 if __name__ == "__main__":
