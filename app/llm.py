@@ -26,7 +26,12 @@ class LLMUnavailable(Exception):
     pass
 
 
-PROVEDORES_SUPORTADOS = frozenset({"groq", "openrouter"})
+PROVEDORES_SUPORTADOS = frozenset({"groq", "openrouter", "anthropic"})
+
+# claude-opus-4-8: id mais recente e documentado da linha Opus no momento da
+# implementacao da ADR 0033 (2026-09-20). Ultimo recurso, so ativa com
+# ANTHROPIC_API_KEY no ambiente.
+ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
 
 
 def _provider() -> str:
@@ -123,6 +128,41 @@ def _response_format(model: str, schema: type[T]) -> dict[str, object]:
     }
 
 
+def _completar_anthropic(system: str, user: str, schema: type[T], retries: int) -> T:
+    from anthropic import Anthropic
+
+    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    modelo = os.getenv("AI_MODEL_ANTHROPIC", ANTHROPIC_DEFAULT_MODEL)
+    ferramenta = {
+        "name": "responder",
+        "description": "Devolve a resposta estruturada exigida pelo schema.",
+        "input_schema": schema.model_json_schema(),
+    }
+    max_tokens = int(os.getenv("AI_MAX_COMPLETION_TOKENS", "8192"))
+    last: Exception | None = None
+    for tentativa in range(retries + 1):
+        try:
+            resposta = client.messages.create(
+                model=modelo,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+                tools=[ferramenta],
+                tool_choice={"type": "tool", "name": "responder"},
+            )
+            for bloco in resposta.content:
+                if bloco.type == "tool_use":
+                    return schema.model_validate(bloco.input)
+            last = LLMUnavailable("anthropic nao devolveu tool_use estruturado")
+        except Exception as exc:
+            last = exc
+            logger.warning(
+                "falha na chamada estruturada anthropic model=%s tentativa=%s tipo=%s erro=%s",
+                modelo, tentativa + 1, type(exc).__name__, str(exc),
+            )
+    raise LLMUnavailable(str(last))
+
+
 def complete_model(
     system: str, user: str, schema: type[T], retries: int = 2
 ) -> T:
@@ -133,6 +173,10 @@ def complete_model(
         raise LLMUnavailable("GROQ_API_KEY ausente")
     if provider == "openrouter" and not os.getenv("OPENROUTER_API_KEY"):
         raise LLMUnavailable("OPENROUTER_API_KEY ausente")
+    if provider == "anthropic":
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            raise LLMUnavailable("ANTHROPIC_API_KEY ausente")
+        return _completar_anthropic(system, user, schema, retries)
 
     client, model = _client_and_model()
     messages = [
