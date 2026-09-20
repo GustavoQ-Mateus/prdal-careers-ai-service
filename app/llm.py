@@ -26,6 +26,9 @@ class LLMUnavailable(Exception):
     pass
 
 
+PROVEDORES_SUPORTADOS = frozenset({"groq", "openrouter"})
+
+
 def _provider() -> str:
     return os.getenv("AI_PROVIDER", "groq").lower()
 
@@ -39,6 +42,12 @@ def _env_float(nome: str, fallback: float) -> float:
 
 
 def _client_and_model() -> tuple[OpenAI, str]:
+    if _provider() == "openrouter":
+        return OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY", ""),
+            timeout=_env_float("AI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS),
+        ), os.getenv("AI_MODEL", DEFAULT_MODEL)
     return OpenAI(
         base_url="https://api.groq.com/openai/v1",
         api_key=os.getenv("GROQ_API_KEY", ""),
@@ -117,10 +126,13 @@ def _response_format(model: str, schema: type[T]) -> dict[str, object]:
 def complete_model(
     system: str, user: str, schema: type[T], retries: int = 2
 ) -> T:
-    if _provider() != "groq":
-        raise LLMUnavailable("somente Groq esta habilitado para geracao")
-    if not os.getenv("GROQ_API_KEY"):
+    provider = _provider()
+    if provider not in PROVEDORES_SUPORTADOS:
+        raise LLMUnavailable(f"provedor nao suportado: {provider}")
+    if provider == "groq" and not os.getenv("GROQ_API_KEY"):
         raise LLMUnavailable("GROQ_API_KEY ausente")
+    if provider == "openrouter" and not os.getenv("OPENROUTER_API_KEY"):
+        raise LLMUnavailable("OPENROUTER_API_KEY ausente")
 
     client, model = _client_and_model()
     messages = [
@@ -144,7 +156,7 @@ def complete_model(
                 "temperature": 0,
                 "max_completion_tokens": max_completion_tokens,
             }
-            if _supports_reasoning_effort(model):
+            if provider == "groq" and _supports_reasoning_effort(model):
                 params["reasoning_effort"] = reasoning_effort
             resp = client.chat.completions.create(**params)
             content = resp.choices[0].message.content or "{}"
