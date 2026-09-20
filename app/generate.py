@@ -502,18 +502,20 @@ def _normalizar_cabecalhos(texto: str, req: GenerateCvRequest) -> str:
     return "\n".join(linhas)
 
 
-def _normalizar_cabecalho_experiencia(texto: str) -> str:
+def _normalizar_cabecalho_experiencia(texto: str, req: GenerateCvRequest) -> str:
+    idioma = _idioma(req)
     linhas = []
     for linha in texto.splitlines():
         bruta = linha.strip()
         m = re.match(r"^#{1,6}\s+(.+)$", bruta)
         conteudo = m.group(1).strip() if m else bruta
-        partes = conteudo.split("|")
-        if m and len(partes) == 3:
-            primeira = partes[0].strip()
+        partes = [p.strip() for p in conteudo.split("|")]
+        if m and len(partes) >= 3:
+            primeira = partes[0]
             if not (primeira.startswith("**") and primeira.endswith("**")):
                 primeira = f"**{primeira.strip('*').strip()}**"
-            linhas.append(" | ".join([primeira, partes[1].strip(), partes[2].strip()]))
+            periodo = _periodo_mm_aaaa(partes[2], idioma)
+            linhas.append(" | ".join([primeira, partes[1], periodo]))
         else:
             linhas.append(linha)
     return "\n".join(linhas)
@@ -522,7 +524,7 @@ def _normalizar_cabecalho_experiencia(texto: str) -> str:
 def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
     texto = markdown.translate(PONTUACAO_ASCII)
     texto = "\n".join(re.sub(r"[ \t]+", " ", linha).rstrip() for linha in texto.splitlines())
-    texto = _normalizar_cabecalho_experiencia(texto)
+    texto = _normalizar_cabecalho_experiencia(texto, req)
     linhas = _normalizar_cabecalhos(texto, req).strip().splitlines()
     if linhas and linhas[0].startswith("# ") and " | " in linhas[0]:
         nome, titulo = linhas[0][2:].split(" | ", 1)

@@ -12,6 +12,7 @@ from app.generate import (
     _erros_saida,
     _limpar_markdown,
     _linha_contato,
+    _normalizar_cabecalho_experiencia,
     analisar_ats,
     generate_cv_pipeline,
     reduzir_curriculo,
@@ -308,6 +309,57 @@ class IntegridadeConteudoTest(unittest.TestCase):
         self.assertNotIn("‑", limpo)
         self.assertIn("Back-End", limpo)
         self.assertIn("CI-CD", limpo)
+
+
+class NormalizacaoCabecalhoExperienciaTest(unittest.TestCase):
+    """Casos reais capturados na ADR 0033 (llama-3.3-70b-instruct via OpenRouter)."""
+
+    def setUp(self):
+        self.req = _req_tres_experiencias()
+
+    def test_cabecalho_com_quatro_campos_e_mes_abreviado_e_normalizado(self):
+        # amostra real da ADR 0033: cargo | empresa | "Jun. 2026 a atual" | local
+        linha_real = (
+            "### **Desenvolvedor Full-Stack** | Modera Road Inspector | "
+            "Jun. 2026 a atual | Pernambuco"
+        )
+        normalizado = _normalizar_cabecalho_experiencia(linha_real, self.req)
+
+        self.assertEqual(
+            "**Desenvolvedor Full-Stack** | Modera Road Inspector | 06/2026 - atual",
+            normalizado,
+        )
+
+    def test_cabecalho_de_tres_campos_com_heading_continua_normalizado(self):
+        linha = "### Saraiva Leao | Desenvolvedor Full-Stack | Mar. 2025 a atual"
+        normalizado = _normalizar_cabecalho_experiencia(linha, self.req)
+
+        self.assertEqual(
+            "**Saraiva Leao** | Desenvolvedor Full-Stack | 03/2025 - atual",
+            normalizado,
+        )
+
+    def test_pipeline_aceita_experiencia_de_quatro_campos_e_mes_abreviado(self):
+        markdown = (
+            "# Gustavo Queiroz Mateus\n**Desenvolvedor Back-End Java Jr**\n"
+            "+55 85 99120-7171 | gustavoqueirozunifor@edu.unifor.br\n\n"
+            "## RESUMO PROFISSIONAL\nDesenvolvedor back-end Java.\n\n"
+            "## COMPETÊNCIAS\n- Linguagens: Java\n\n"
+            "## EXPERIÊNCIA PROFISSIONAL\n"
+            "### **Desenvolvedor Full-Stack** | Modera Road Inspector | "
+            "Jun. 2026 a atual | Pernambuco\n"
+            "- Atuei no back-end com Python (FastAPI) e PostgreSQL.\n\n"
+            "## FORMAÇÃO ACADÊMICA\nUNIFOR\n\n"
+            "## CERTIFICAÇÕES\n\n## IDIOMAS\nPortuguês, nativo\n"
+        )
+        limpo = _limpar_markdown(markdown, self.req)
+
+        self.assertIn(
+            "**Desenvolvedor Full-Stack** | Modera Road Inspector | 06/2026 - atual",
+            limpo,
+        )
+        self.assertNotIn("Jun.", limpo)
+        self.assertEqual([], _erros_contrato(limpo, self.req))
 
 
 if __name__ == "__main__":
