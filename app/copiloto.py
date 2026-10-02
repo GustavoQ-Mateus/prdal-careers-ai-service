@@ -225,16 +225,15 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
     narracao = _narracao_ats_concluida(req)
     if narracao:
         return narracao
-    try:
-        res = complete_model(SYSTEM_TURNO, _user(req), TurnResponse)
-        if res.tipo in ("texto", "tool_call"):
-            if res.tipo == "tool_call" and not res.tool:
-                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or "", req))
-            if res.tipo == "texto":
-                return TurnResponse(tipo="texto", texto=_texto_para_candidato(res.texto or "", req))
-            return res
-    except LLMUnavailable:
-        raise
+    res = complete_model(SYSTEM_TURNO, _user(req), TurnResponse)
+    if res.tipo not in ("texto", "tool_call"):
+        raise LLMUnavailable(f"tipo de turno invalido: {res.tipo!r}")
+    if res.tipo == "tool_call" and res.tool:
+        return res
+    texto = _texto_para_candidato(res.texto or "", req).strip()
+    if not texto:
+        raise LLMUnavailable("turno sem texto e sem tool")
+    return TurnResponse(tipo="texto", texto=texto)
 
 
 SYSTEM_MENSAGEM = (
@@ -266,12 +265,10 @@ def redigir_mensagem(req: RedigirMensagemRequest) -> RedigirMensagemResponse:
         'Devolva JSON {"titulo":"...","texto":"...","destino":"..."} com a mensagem '
         "pronta para copiar."
     )
-    try:
-        res = complete_model(SYSTEM_MENSAGEM, user, RedigirMensagemResponse)
-        if res.texto.strip():
-            return res
-    except LLMUnavailable:
-        raise
+    res = complete_model(SYSTEM_MENSAGEM, user, RedigirMensagemResponse)
+    if not res.texto.strip():
+        raise LLMUnavailable("mensagem ao recrutador vazia")
+    return res
 
 
 SYSTEM_FORMULARIO = (
@@ -291,9 +288,7 @@ def redigir_formulario(req: RedigirFormularioRequest) -> RedigirFormularioRespon
         'Devolva JSON {"titulo":"...","respostas":[{"campo":"...","texto":"..."}],'
         '"texto":"..."} com uma resposta por campo e um texto consolidado.'
     )
-    try:
-        res = complete_model(SYSTEM_FORMULARIO, user, RedigirFormularioResponse)
-        if res.respostas:
-            return res
-    except LLMUnavailable:
-        raise
+    res = complete_model(SYSTEM_FORMULARIO, user, RedigirFormularioResponse)
+    if not res.respostas or not any(r.texto.strip() for r in res.respostas):
+        raise LLMUnavailable("respostas de formulario vazias")
+    return res

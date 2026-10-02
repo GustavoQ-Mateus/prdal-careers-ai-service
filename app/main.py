@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
+from .degradacao import COPILOTO_INDISPONIVEL, REDACAO_INDISPONIVEL, registrar
 from .generate import (
     KeywordsUnavailable,
     analisar_ats,
@@ -174,7 +175,7 @@ def copiloto_turn(req: TurnRequest) -> TurnResponse:
     try:
         return planejar_turno(req)
     except LLMUnavailable as exc:
-        raise HTTPException(status_code=503, detail="copiloto indisponivel no momento") from exc
+        raise HTTPException(status_code=503, detail=registrar(COPILOTO_INDISPONIVEL, exc)) from exc
 
 
 @app.post("/copiloto/redigir-mensagem", response_model=RedigirMensagemResponse)
@@ -184,7 +185,7 @@ def copiloto_redigir_mensagem(
     try:
         return redigir_mensagem(req)
     except LLMUnavailable as exc:
-        raise HTTPException(status_code=503, detail=f"redacao indisponivel: {exc}") from exc
+        raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc
 
 
 @app.post("/copiloto/redigir-formulario", response_model=RedigirFormularioResponse)
@@ -194,4 +195,4 @@ def copiloto_redigir_formulario(
     try:
         return redigir_formulario(req)
     except LLMUnavailable as exc:
-        raise HTTPException(status_code=503, detail=f"redacao indisponivel: {exc}") from exc
+        raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc

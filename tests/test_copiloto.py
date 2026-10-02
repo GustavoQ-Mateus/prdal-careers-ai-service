@@ -1,5 +1,8 @@
 import json
 import unittest
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
 
 from app.copiloto import (
     SYSTEM_TURNO,
@@ -7,8 +10,22 @@ from app.copiloto import (
     _narracao_ats_concluida,
     _regerar_por_perfil_atualizado,
     _texto_para_candidato,
+    planejar_turno,
+    redigir_formulario,
+    redigir_mensagem,
 )
-from app.schemas import MensagemTurno, ToolSpec, TurnRequest
+from app.llm import LLMUnavailable
+from app.main import app
+from app.schemas import (
+    MensagemTurno,
+    RedigirFormularioRequest,
+    RedigirFormularioResponse,
+    RedigirMensagemRequest,
+    RedigirMensagemResponse,
+    ToolSpec,
+    TurnRequest,
+    TurnResponse,
+)
 
 
 class CatalogoCopilotoTest(unittest.TestCase):
@@ -137,6 +154,42 @@ class NarracaoAtsCopilotoTest(unittest.TestCase):
         self.assertIn("[[NARRACAO_ATS_ETAPA_3]]", resposta.texto)
         self.assertIn("Etapa 3", resposta.texto)
         self.assertIn("Score final: 76", resposta.texto)
+
+
+class RespostaVaziaCopilotoTest(unittest.TestCase):
+    @patch("app.copiloto.complete_model", return_value=RedigirMensagemResponse(titulo="t", texto="  "))
+    def test_mensagem_vazia_vira_indisponibilidade(self, _complete):
+        with self.assertRaises(LLMUnavailable):
+            redigir_mensagem(RedigirMensagemRequest())
+
+    @patch("app.copiloto.complete_model", return_value=RedigirFormularioResponse(titulo="t", respostas=[], texto=""))
+    def test_formulario_sem_respostas_vira_indisponibilidade(self, _complete):
+        with self.assertRaises(LLMUnavailable):
+            redigir_formulario(RedigirFormularioRequest(campos=["Por que esta vaga?"]))
+
+    @patch("app.copiloto.complete_model", return_value=TurnResponse(tipo="outro", texto="oi"))
+    def test_turno_com_tipo_invalido_vira_indisponibilidade(self, _complete):
+        with self.assertRaises(LLMUnavailable):
+            planejar_turno(TurnRequest(mensagens=[MensagemTurno(papel="user", conteudo="oi")]))
+
+    @patch("app.copiloto.complete_model", return_value=TurnResponse(tipo="texto", texto=""))
+    def test_turno_vazio_vira_indisponibilidade(self, _complete):
+        with self.assertRaises(LLMUnavailable):
+            planejar_turno(TurnRequest(mensagens=[MensagemTurno(papel="user", conteudo="oi")]))
+
+    @patch("app.copiloto.complete_model", return_value=RedigirMensagemResponse(titulo="t", texto=""))
+    def test_endpoint_de_redacao_responde_503_com_frase_de_produto(self, _complete):
+        resposta = TestClient(app).post("/copiloto/redigir-mensagem", json={})
+        self.assertEqual(resposta.status_code, 503)
+        self.assertIn("indisponível", resposta.json()["detail"])
+        self.assertNotIn("vazia", resposta.json()["detail"])
+
+    @patch("app.copiloto.complete_model", return_value=TurnResponse(tipo="texto", texto=""))
+    def test_endpoint_de_turno_responde_503(self, _complete):
+        resposta = TestClient(app).post(
+            "/copiloto/turn", json={"mensagens": [{"papel": "user", "conteudo": "oi"}]}
+        )
+        self.assertEqual(resposta.status_code, 503)
 
 
 if __name__ == "__main__":
