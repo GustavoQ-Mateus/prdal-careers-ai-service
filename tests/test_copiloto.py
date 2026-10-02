@@ -85,7 +85,25 @@ class PerfilAtualizadoCopilotoTest(unittest.TestCase):
 
         self.assertNotIn("editar_curriculo", texto)
         self.assertNotIn("PUT", texto)
-        self.assertNotIn("JSON", texto)
+        self.assertNotIn("/curriculos/1", texto)
+
+    def test_preserva_vocabulario_legitimo_do_candidato(self):
+        frase = (
+            "A vaga pede experiencia com JSON, APIs REST e tools de observabilidade; "
+            "a rota de carreira e backend."
+        )
+        self.assertEqual(_texto_para_candidato(frase), frase)
+        self.assertEqual(
+            _texto_para_candidato("O payload da API e enviado em json."),
+            "O payload da API e enviado em json.",
+        )
+
+    def test_remove_nomes_exatos_das_tools_recebidas(self):
+        req = TurnRequest(tools=[ToolSpec(nome="consultar_agenda_extra", efeito="leitura")])
+        texto = _texto_para_candidato("Usei consultar_agenda_extra e buscar_curriculo agora.", req)
+        self.assertNotIn("consultar_agenda_extra", texto)
+        self.assertNotIn("buscar_curriculo", texto)
+        self.assertIn("agora", texto)
 
 
 class NarracaoAtsCopilotoTest(unittest.TestCase):

@@ -81,8 +81,7 @@ _FERRAMENTAS_INTERNAS = (
     "registrar_nota|redigir_mensagem_recrutador|redigir_respostas_formulario"
 )
 _DETALHE_INTERNO = re.compile(
-    rf"\b(?:{_FERRAMENTAS_INTERNAS})\b|\b(?:GET|POST|PUT|PATCH)\s+/\S+|\b(?:payload|json|tool|tools|rota)\b",
-    re.IGNORECASE,
+    rf"\b(?:{_FERRAMENTAS_INTERNAS})\b|\b(?:GET|POST|PUT|PATCH|DELETE)\s+/\S+",
 )
 
 
