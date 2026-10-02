@@ -1,0 +1,15 @@
+{
+  "id": "sinonimos",
+  "versao": 1,
+  "grupos": [
+    ["JavaScript", "JS"],
+    ["TypeScript", "TS"],
+    ["PostgreSQL", "Postgres"],
+    ["Kubernetes", "k8s"],
+    ["React", "React.js", "ReactJS"],
+    ["Node.js", "Node", "NodeJS"],
+    [".NET", "dotnet"],
+    ["C#", "CSharp"],
+    ["CI/CD", "CICD"]
+  ]
+}

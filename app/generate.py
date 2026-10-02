@@ -4,6 +4,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
+from .casamento import termo_presente
 from .llm import LLMUnavailable, complete_model
 from .schemas import (
     AtsAnalysis,
@@ -187,10 +188,6 @@ def _sem_acentos(texto: str) -> str:
     ).lower()
 
 
-def _contains_norm(texto: str, termo: str) -> bool:
-    return _termo_presente(termo, texto)
-
-
 def _fonte_factual(req: GenerateCvRequest) -> str:
     return "\n".join(
         [
@@ -200,28 +197,12 @@ def _fonte_factual(req: GenerateCvRequest) -> str:
     )
 
 
-def _compactar_termo(texto: str) -> str:
-    return re.sub(r"[^a-z0-9#+]+", "", normalize(texto))
-
-
-def _termo_presente(termo: str, texto: str) -> bool:
-    termo_norm = normalize(termo.strip())
-    texto_norm = normalize(texto)
-    if not termo_norm:
-        return False
-    padrao = rf"(?<![a-z0-9]){re.escape(termo_norm)}(?![a-z0-9])"
-    if re.search(padrao, texto_norm):
-        return True
-    compacto = _compactar_termo(termo)
-    return bool(len(compacto) > 2 and compacto in _compactar_termo(texto))
-
-
 def _termo_bloqueado(termo: str, req: GenerateCvRequest) -> bool:
     return bool(termo.strip()) and not _termo_autorizado(termo, req)
 
 
 def _termo_autorizado(termo: str, req: GenerateCvRequest) -> bool:
-    return _termo_presente(termo, _fonte_factual(req))
+    return termo_presente(termo, _fonte_factual(req))
 
 
 def _limpar_termos_bloqueados(texto: str, req: GenerateCvRequest) -> str:
@@ -231,7 +212,7 @@ def _limpar_termos_bloqueados(texto: str, req: GenerateCvRequest) -> str:
 def _titulo_vaga_seguro(titulo: str, req: GenerateCvRequest | None = None) -> str:
     limpo = re.sub(r"\s{2,}", " ", titulo).strip(" -/|,+")
     if req and any(
-        _termo_presente(termo, limpo) and not _termo_autorizado(termo, req)
+        termo_presente(termo, limpo) and not _termo_autorizado(termo, req)
         for termo in TECH_CATALOG
     ):
         cargo = next((e.cargo for e in req.perfil_mestre.experiencias if e.cargo), "")
@@ -403,10 +384,10 @@ def _texto_experiencia(experiencia: ExperienciaPerfil) -> str:
 
 
 def _competencias_relevantes(req: GenerateCvRequest) -> list[str]:
-    perfil_texto = normalize(_texto_perfil(req.perfil_mestre))
+    perfil_texto = _texto_perfil(req.perfil_mestre)
     relevantes = [
         k.termo.strip() for k in req.keywords
-        if k.termo.strip() and normalize(k.termo) in perfil_texto and _termo_autorizado(k.termo, req)
+        if k.termo.strip() and termo_presente(k.termo, perfil_texto) and _termo_autorizado(k.termo, req)
     ]
     for skill in req.perfil_mestre.skills:
         skill_limpa = _limpar_termos_bloqueados(skill, req)
@@ -462,11 +443,10 @@ def _selecionar_realizacoes(experiencia: ExperienciaPerfil, req: GenerateCvReque
     itens = _realizacoes(experiencia)
     if len(itens) <= limite:
         return itens
-    termos = [normalize(k.termo) for k in req.keywords if k.termo.strip()]
+    termos = [k.termo for k in req.keywords if k.termo.strip()]
     pontuados = []
     for indice, item in enumerate(itens):
-        texto = normalize(item)
-        pontos = sum(1 for termo in termos if termo in texto)
+        pontos = sum(1 for termo in termos if termo_presente(termo, item))
         pontuados.append((pontos, -indice, indice))
     escolhidos = sorted(i for _, _, i in sorted(pontuados, reverse=True)[:limite])
     return [itens[i] for i in escolhidos]
@@ -643,7 +623,7 @@ def _erros_factualidade(markdown: str, req: GenerateCvRequest) -> list[str]:
         {
             termo
             for termo in TECH_CATALOG
-            if _termo_presente(termo, markdown) and not _termo_autorizado(termo, req)
+            if termo_presente(termo, markdown) and not _termo_autorizado(termo, req)
         },
         key=str.lower,
     )
@@ -717,7 +697,7 @@ def _erros_completude(markdown: str, req: GenerateCvRequest) -> list[str]:
         faltando = [
             e.empresa
             for e in experiencias
-            if e.empresa.strip() and not _termo_presente(_nucleo_empresa(e.empresa), secao)
+            if e.empresa.strip() and not termo_presente(_nucleo_empresa(e.empresa), secao)
         ]
         if faltando:
             return ["experiencia do perfil-mestre ausente na saida: " + ", ".join(faltando)]
@@ -727,7 +707,7 @@ def _erros_completude(markdown: str, req: GenerateCvRequest) -> list[str]:
         for e in experiencias
         if _experiencia_atual(e)
         and e.empresa.strip()
-        and not _termo_presente(_nucleo_empresa(e.empresa), secao)
+        and not termo_presente(_nucleo_empresa(e.empresa), secao)
     ]
     if faltando:
         return ["experiencia mais recente do perfil-mestre omitida: " + ", ".join(faltando)]
@@ -764,14 +744,13 @@ def _erros_saida(markdown: str, req: GenerateCvRequest) -> list[str]:
 
 def _analise(markdown: str, req: GenerateCvRequest) -> AtsAnalysis:
     score = calcular_score(markdown, req.keywords)
-    texto = normalize(markdown)
     encontradas = []
     ausentes = []
     for k in req.keywords:
         termo = k.termo.strip()
         if not termo:
             continue
-        if normalize(termo) in texto:
+        if termo_presente(termo, markdown):
             encontradas.append(termo)
         elif k.peso >= 0.6 or len(ausentes) < 8:
             ausentes.append(termo)
