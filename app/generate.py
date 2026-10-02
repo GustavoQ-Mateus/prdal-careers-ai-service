@@ -4,6 +4,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
+from . import degradacao as deg
 from .casamento import termo_presente
 from .llm import LLMUnavailable, complete_model
 from .schemas import (
@@ -828,7 +829,7 @@ def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
                 break
         if erros:
             markdown = base
-            degradacao = "Geracao degradada para fallback factual: " + "; ".join(erros)
+            degradacao = deg.registrar(deg.REESCRITA_REJEITADA, "; ".join(erros))
         else:
             parcial = _analise(markdown, req)
             reforcos = _lacunas_autorizadas(parcial, req)
@@ -847,20 +848,14 @@ def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
                     )
                     erros_reforco = _erros_saida(candidato, req) if candidato else ["resposta vazia"]
                     if erros_reforco:
-                        degradacao = (
-                            "Passe dirigido nao aplicado; mantida versao factual valida: "
-                            + "; ".join(erros_reforco)
-                        )
+                        degradacao = deg.registrar(deg.AJUSTE_REJEITADO, "; ".join(erros_reforco))
                     else:
                         markdown = candidato
                 except LLMUnavailable as exc:
-                    degradacao = (
-                        "Passe dirigido indisponivel; mantida versao factual valida: "
-                        f"{exc}"
-                    )
+                    degradacao = deg.registrar(deg.AJUSTE_INDISPONIVEL, exc)
     except LLMUnavailable as exc:
         markdown = base
-        degradacao = f"Groq indisponivel; usado fallback factual: {exc}"
+        degradacao = deg.registrar(deg.REESCRITA_INDISPONIVEL, exc)
     final = _analise(markdown, req)
     return GeneratePipelineResponse(
         markdown=markdown,
@@ -900,14 +895,11 @@ def reduzir_curriculo(
         )
         erros = _erros_saida(candidato, req) if candidato else ["resposta vazia"]
         if erros:
-            degradacao = (
-                "Corte de conteudo nao aplicado; mantida versao anterior: "
-                + "; ".join(erros)
-            )
+            degradacao = deg.registrar(deg.CORTE_REJEITADO, "; ".join(erros))
         else:
             markdown = candidato
     except LLMUnavailable as exc:
-        degradacao = f"Corte de conteudo indisponivel: {exc}"
+        degradacao = deg.registrar(deg.CORTE_INDISPONIVEL, exc)
     final = _analise(markdown, req)
     return GeneratePipelineResponse(
         markdown=markdown,

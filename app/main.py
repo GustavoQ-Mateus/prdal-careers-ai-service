@@ -6,7 +6,12 @@ from pydantic import BaseModel
 
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
-from .degradacao import COPILOTO_INDISPONIVEL, REDACAO_INDISPONIVEL, registrar
+from .degradacao import (
+    COPILOTO_INDISPONIVEL,
+    KEYWORDS_INDISPONIVEIS,
+    REDACAO_INDISPONIVEL,
+    registrar,
+)
 from .generate import (
     KeywordsUnavailable,
     analisar_ats,
@@ -102,7 +107,7 @@ def keywords(req: KeywordsRequest) -> KeywordsResponse:
         return KeywordsResponse(
             keywords=[],
             status="PENDENTE",
-            degradacao=f"Extracao de keywords indisponivel: {exc}",
+            degradacao=registrar(KEYWORDS_INDISPONIVEIS, exc),
         )
 
 
