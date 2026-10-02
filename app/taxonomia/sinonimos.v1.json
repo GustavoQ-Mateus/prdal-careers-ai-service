@@ -7,6 +7,7 @@
     ["PostgreSQL", "Postgres"],
     ["Kubernetes", "k8s"],
     ["React", "React.js", "ReactJS"],
+    ["Vue.js", "Vue", "VueJS"],
     ["Node.js", "Node", "NodeJS"],
     [".NET", "dotnet"],
     ["C#", "CSharp"],

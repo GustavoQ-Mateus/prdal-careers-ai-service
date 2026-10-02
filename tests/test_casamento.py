@@ -38,6 +38,16 @@ class CasamentoTest(unittest.TestCase):
         self.assertTrue(termo_presente("CSS", "Interfaces com HTML/CSS."))
         self.assertTrue(termo_presente("AWS", "Deploy na AWS."))
 
+    def test_casos_de_borda_de_vagas_reais(self):
+        self.assertTrue(termo_presente(".NET", "Experiencia com ASP.NET Core em producao"))
+        self.assertFalse(termo_presente("R", "Salario de R$ 5 mil"))
+        self.assertTrue(termo_presente("R", "Analise estatistica em R e Python"))
+        self.assertTrue(termo_presente("C++", "uso C++17 no motor de jogo"))
+        self.assertTrue(termo_presente("C#", "APIs em C#12 com .NET 8"))
+        self.assertTrue(termo_presente("Vue.js", "Front em Vue 3 com Pinia"))
+        self.assertFalse(termo_presente("C", "Trabalhei com C++17 e C#12."))
+        self.assertFalse(termo_presente("Java", "Front em JavaScript"))
+
     def test_segunda_tentativa_compacta_aceita_variacao_de_grafia(self):
         self.assertTrue(termo_presente("Node.js", "Servicos em NodeJS"))
         self.assertTrue(termo_presente("CI/CD", "Pipelines de CI CD com GitHub Actions"))

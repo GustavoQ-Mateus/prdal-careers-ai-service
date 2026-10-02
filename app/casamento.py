@@ -8,7 +8,8 @@ from pathlib import Path
 ARQUIVO_SINONIMOS = Path(__file__).resolve().parent / "taxonomia" / "sinonimos.v1.json"
 
 _ANTES = r"(?<![a-z0-9])(?<![a-z0-9]\.)"
-_DEPOIS = r"(?![a-z0-9#+])(?!\.[a-z0-9])"
+_DEPOIS = r"(?![a-z0-9#+$])(?!\.[a-z0-9])"
+_VERSAO_APOS_SIMBOLO = r"(?:\d+)?"
 _SEPARADOR_COMPOSTO = r"[ \t-]+"
 _PALAVRA_TECNICA = re.compile(r"[a-z0-9#+]+(?:[./-][a-z0-9#+]+)*")
 _ESPACO_ENTRE_PALAVRAS = re.compile(r"[ \t-]+")
@@ -62,7 +63,9 @@ def _casar_literal(forma: str, alvo: str) -> tuple[int, int] | None:
     partes = normalizar(forma).split()
     if not partes:
         return None
-    padrao = _ANTES + _SEPARADOR_COMPOSTO.join(re.escape(p) for p in partes) + _DEPOIS
+    antes = "" if partes[0].startswith(".") else _ANTES
+    versao = _VERSAO_APOS_SIMBOLO if partes[-1].endswith(("+", "#")) else ""
+    padrao = antes + _SEPARADOR_COMPOSTO.join(re.escape(p) for p in partes) + versao + _DEPOIS
     achado = re.search(padrao, alvo)
     return achado.span() if achado else None
 
