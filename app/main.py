@@ -25,6 +25,13 @@ from .generate import (
 from .keywords import extract_keywords
 from .llm import LLMUnavailable
 from .rag import consultar, indexar, substituir
+from .seguranca import (
+    HEADER_SERVICO,
+    exigir_servico,
+    exigir_token_no_boot,
+    rotas_de_documentacao,
+    token_servico,
+)
 from .schemas import (
     ClassifyRequest,
     ClassifyResponse,
@@ -68,13 +75,15 @@ def _aquecer_embeddings() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    exigir_token_no_boot()
     prompts = carregar_prompts()
     logger.info("prompts carregados: %s", ", ".join(p.rotulo for p in prompts.values()))
     _aquecer_embeddings()
     yield
 
 
-app = FastAPI(title="ai-service", lifespan=lifespan)
+app = FastAPI(title="ai-service", lifespan=lifespan, **rotas_de_documentacao())
+app.middleware("http")(exigir_servico)
 
 
 class HealthResponse(BaseModel):
@@ -102,7 +111,10 @@ def health() -> HealthResponse:
 async def hello() -> HelloResponse:
     hop = HelloHop(service="ai-service", message="hello from ai-service")
     async with httpx.AsyncClient(timeout=5.0) as client:
-        resp = await client.get(f"{DOC_SERVICE_URL}/hello")
+        resp = await client.get(
+            f"{DOC_SERVICE_URL}/hello",
+            headers={HEADER_SERVICO: token_servico()},
+        )
         resp.raise_for_status()
         downstream = HelloResponse.model_validate(resp.json())
     return HelloResponse(
