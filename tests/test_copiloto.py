@@ -49,8 +49,9 @@ class CatalogoCopilotoTest(unittest.TestCase):
 
     def test_reserva_etapas_para_narracao_ats_e_separa_as_duas_mensagens(self):
         self.assertNotIn("Etapa 1, registrar", SYSTEM_TURNO)
-        self.assertIn("'Etapa 1 — Analise ATS'", SYSTEM_TURNO)
-        self.assertIn("'Etapa 3 — Score pos-geracao'", SYSTEM_TURNO)
+        self.assertIn("'Etapa 1: Aderencia do perfil-mestre'", SYSTEM_TURNO)
+        self.assertIn("Aderencia do curriculo gerado'", SYSTEM_TURNO)
+        self.assertNotIn("\u2014", SYSTEM_TURNO)
         self.assertIn("[[NARRACAO_ATS_ETAPA_3]]", SYSTEM_TURNO)
 
 
@@ -150,10 +151,14 @@ class NarracaoAtsCopilotoTest(unittest.TestCase):
         self.assertIsNotNone(resposta)
         self.assertIn("Etapa 1", resposta.texto)
         self.assertIn("Keywords encontradas: TypeScript", resposta.texto)
-        self.assertIn("Pontos eliminatorios: secao obrigatoria ausente", resposta.texto)
+        self.assertIn("Pontos de atenção: secao obrigatoria ausente", resposta.texto)
         self.assertIn("[[NARRACAO_ATS_ETAPA_3]]", resposta.texto)
-        self.assertIn("Etapa 3", resposta.texto)
-        self.assertIn("Score final: 76", resposta.texto)
+        self.assertIn("Etapa 1: Aderência do perfil-mestre", resposta.texto)
+        self.assertIn("Etapa 3: Aderência do currículo gerado", resposta.texto)
+        self.assertIn("Score: 76", resposta.texto)
+        self.assertIn("Keywords ainda ausentes: Docker", resposta.texto)
+        for proibida in ("aumentou", "melhorou", "reduziu", "\u2014"):
+            self.assertNotIn(proibida, resposta.texto)
 
 
 class RespostaVaziaCopilotoTest(unittest.TestCase):

@@ -83,6 +83,20 @@ class CasamentoTest(unittest.TestCase):
         self.assertFalse(_termo_autorizado("Java", req))
         self.assertTrue(_termo_autorizado("C#", req))
 
+    def test_veredicto_descreve_cobertura_sem_prometer_filtro(self):
+        req = _req(["Python", "Docker", "AWS", "Kafka"], [])
+        casos = {
+            "Python, Docker, AWS e Kafka": "alta",
+            "Python e Docker": "média",
+            "nada relacionado": "baixa",
+        }
+        for texto, nivel in casos.items():
+            with self.subTest(nivel=nivel):
+                veredicto = _analise(f"## RESUMO PROFISSIONAL\n{texto}\n", req).veredicto
+                self.assertIn(f"Cobertura {nivel}", veredicto)
+                for proibida in ("filtro", "elimin", "passa", "aprov"):
+                    self.assertNotIn(proibida, veredicto.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

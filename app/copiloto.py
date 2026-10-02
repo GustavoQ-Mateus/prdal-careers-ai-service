@@ -41,12 +41,13 @@ SYSTEM_TURNO = (
     "externo antes de concluir essa consulta final. Quando buscar_curriculo trouxer "
     "analiseInicial e analiseFinal apos uma geracao CONCLUIDA, responda ao candidato "
     "em duas mensagens de texto sequenciais, nunca com um resumo de uma linha. A "
-    "primeira e 'Etapa 1 — Analise ATS': informe score, keywordsEncontradas, "
+    "primeira e 'Etapa 1: Aderencia do perfil-mestre': informe score, keywordsEncontradas, "
     "keywordsCriticasAusentes, pontosEliminatorios somente quando houver, e o "
     "veredicto em no maximo duas linhas. Em seguida, escreva uma linha contendo "
-    "somente [[NARRACAO_ATS_ETAPA_3]] e continue com a segunda mensagem, 'Etapa 3 "
-    "— Score pos-geracao', comparando o score final ao inicial e dizendo o que "
-    "mudou. O marcador e interno e jamais pode aparecer ao candidato. Para texto "
+    "somente [[NARRACAO_ATS_ETAPA_3]] e continue com a segunda mensagem, 'Etapa 3: "
+    "Aderencia do curriculo gerado', informando o score do curriculo gerado ao lado "
+    "do score do perfil-mestre, sem dizer que aumentou, melhorou ou reduziu, porque "
+    "os dois medem textos montados pelo sistema. O marcador e interno e jamais pode aparecer ao candidato. Para texto "
     "visivel ao candidato, 'Etapa 1', 'Etapa 2' e 'Etapa 3' significam somente a "
     "metodologia ATS: Analise, Reescrita e Score pos-geracao. "
     "Se o status ainda nao for terminal, informe que a geracao esta em andamento; "
@@ -163,28 +164,25 @@ def _narracao_ats_concluida(req: TurnRequest) -> TurnResponse | None:
 
     pontos = lista("pontosEliminatorios")
     linhas_iniciais = [
-        "Etapa 1 — Analise ATS",
+        "Etapa 1: Aderência do perfil-mestre",
         f"Score: {score_inicial}",
         f"Keywords encontradas: {lista('keywordsEncontradas')}",
-        f"Keywords criticas ausentes: {lista('keywordsCriticasAusentes')}",
+        f"Keywords críticas ausentes: {lista('keywordsCriticasAusentes')}",
     ]
     if pontos != "Nenhuma":
-        linhas_iniciais.append(f"Pontos eliminatorios: {pontos}")
+        linhas_iniciais.append(f"Pontos de atenção: {pontos}")
     linhas_iniciais.append(f"Veredicto: {str(inicial.get('veredicto') or 'Sem veredicto informado.')}")
 
-    diferenca = score_final - score_inicial
-    if diferenca > 0:
-        comparacao = f"aumentou {diferenca:g} ponto(s)"
-    elif diferenca < 0:
-        comparacao = f"reduziu {abs(diferenca):g} ponto(s)"
-    else:
-        comparacao = "permaneceu igual"
-    texto = (
-        "\n".join(linhas_iniciais)
-        + "\n\n[[NARRACAO_ATS_ETAPA_3]]\n\n"
-        + "Etapa 3 — Score pos-geracao\n"
-        + f"Score final: {score_final}, comparado ao inicial de {score_inicial}: {comparacao}."
-    )
+    linhas_finais = [
+        "Etapa 3: Aderência do currículo gerado",
+        f"Score: {score_final}. Para referência, a aderência do perfil-mestre foi {score_inicial}.",
+    ]
+    ausentes_finais = final.get("keywordsCriticasAusentes")
+    if isinstance(ausentes_finais, list) and any(str(item).strip() for item in ausentes_finais):
+        linhas_finais.append(
+            "Keywords ainda ausentes: " + ", ".join(str(item).strip() for item in ausentes_finais if str(item).strip())
+        )
+    texto = "\n".join(linhas_iniciais) + "\n\n[[NARRACAO_ATS_ETAPA_3]]\n\n" + "\n".join(linhas_finais)
     return TurnResponse(tipo="texto", texto=texto)
 
 

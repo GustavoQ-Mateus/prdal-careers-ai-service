@@ -294,7 +294,7 @@ def _periodo_mm_aaaa(periodo: str, idioma: str) -> str:
         r"\s+(?:a|ate|até|to|hasta)\s+(?:atual|present|actual)\b",
         f" - {atual}", texto, flags=re.IGNORECASE,
     )
-    return re.sub(r"\s*[–—]\s*", " - ", texto)
+    return re.sub(r"\s*[\u2013\u2014]\s*", " - ", texto)
 
 
 ATUAL_TERMOS = ("atual", "present", "actual")
@@ -317,7 +317,7 @@ def _chave_recencia(periodo: str) -> tuple[int, tuple[int, int], tuple[int, int]
 
 
 def _nucleo_empresa(empresa: str) -> str:
-    return re.split(r"\s*[·|,\-–—/]\s*", empresa.strip(), maxsplit=1)[0].strip()
+    return re.split(r"\s*[·|,\-\u2013\u2014/]\s*", empresa.strip(), maxsplit=1)[0].strip()
 
 
 def _experiencia_atual(experiencia: ExperienciaPerfil) -> bool:
@@ -728,6 +728,10 @@ def _erros_saida(markdown: str, req: GenerateCvRequest) -> list[str]:
     ]
 
 
+COBERTURA_ALTA = 70
+COBERTURA_MEDIA = 50
+
+
 def _analise(markdown: str, req: GenerateCvRequest) -> AtsAnalysis:
     score = calcular_score(markdown, req.keywords)
     encontradas = []
@@ -748,13 +752,15 @@ def _analise(markdown: str, req: GenerateCvRequest) -> AtsAnalysis:
         pontos.append("baixa aderencia as keywords criticas da vaga")
     if not re.search(r"\d{2}/\d{4}", markdown):
         pontos.append("datas em MM/AAAA ausentes ou insuficientes")
-    veredicto = (
-        "Passa no filtro automatico com ajustes finos recomendados."
-        if score.score >= 70 and not pontos
-        else "Passa com risco no filtro automatico; revisar ausencias criticas."
-        if score.score >= 55
-        else "Eliminado no filtro automatico por baixa aderencia deterministica."
-    )
+    cobertura = score.breakdown.keyword_match
+    if cobertura >= COBERTURA_ALTA:
+        veredicto = "Cobertura alta das keywords da vaga" + (
+            "; revise os pontos de atenção." if pontos else "."
+        )
+    elif cobertura >= COBERTURA_MEDIA:
+        veredicto = "Cobertura média das keywords da vaga; revise as keywords críticas ausentes."
+    else:
+        veredicto = "Cobertura baixa das keywords da vaga; poucas keywords principais aparecem no texto."
     return AtsAnalysis(
         score=score.score,
         score_versao=score.score_versao,
