@@ -104,6 +104,7 @@ class GeneratePipelineResponse(CamelModel):
     analise_inicial: AtsAnalysis
     analise_final: AtsAnalysis
     degradacao: str | None = None
+    prompt_version: str | None = None
 
 
 class ScoreRequest(CamelModel):

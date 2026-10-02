@@ -1,9 +1,12 @@
+import logging
 import os
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from .carregador_prompts import carregar_prompts
 from .classify import classificar, taxonomia
 from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
 from .degradacao import (
@@ -51,7 +54,27 @@ from .score import calcular_score
 
 DOC_SERVICE_URL = os.getenv("DOC_SERVICE_URL", "http://localhost:8080")
 
-app = FastAPI(title="ai-service")
+logger = logging.getLogger(__name__)
+
+
+def _aquecer_embeddings() -> None:
+    try:
+        from .rag import _model
+
+        _model()
+    except Exception as exc:
+        logger.warning("aquecimento do modelo de embeddings adiado: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    prompts = carregar_prompts()
+    logger.info("prompts carregados: %s", ", ".join(p.rotulo for p in prompts.values()))
+    _aquecer_embeddings()
+    yield
+
+
+app = FastAPI(title="ai-service", lifespan=lifespan)
 
 
 class HealthResponse(BaseModel):
@@ -68,16 +91,6 @@ class HelloResponse(BaseModel):
     service: str
     message: str
     chain: list[HelloHop]
-
-
-@app.on_event("startup")
-def _warmup() -> None:
-    try:
-        from .rag import _model
-
-        _model()
-    except Exception:
-        pass
 
 
 @app.get("/health", response_model=HealthResponse)

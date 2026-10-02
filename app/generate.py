@@ -1,10 +1,10 @@
 import logging
 import re
 import unicodedata
-from pathlib import Path
 from typing import Any
 
 from . import degradacao as deg
+from .carregador_prompts import obter as obter_prompt
 from .casamento import termo_presente
 from .llm import LLMUnavailable, complete_model
 from .schemas import (
@@ -34,19 +34,7 @@ class KeywordsUnavailable(ValueError):
     pass
 
 
-def _repo_root() -> Path:
-    atual = Path(__file__).resolve()
-    for path in [Path.cwd(), *atual.parents]:
-        if (path / ".claude" / "agents").exists():
-            return path
-    return Path.cwd()
-
-
-REPO_ROOT = _repo_root()
-SPEC_CANDIDATES = [
-    Path.cwd() / ".claude" / "agents" / "modo-pipeline-curriculo.md",
-    REPO_ROOT / ".claude" / "agents" / "modo-pipeline-curriculo.md",
-]
+PROMPT_REESCRITA = "reescrita"
 
 TECH_CATALOG = (
     "django", "next.js", "nextjs", "kafka", "laravel", "vue", "ruby", "rails",
@@ -59,21 +47,11 @@ TECH_CATALOG = (
 )
 
 
-def _read_spec() -> str:
-    for path in SPEC_CANDIDATES:
-        if path.exists():
-            return path.read_text(encoding="utf-8")
-    return (
-        "Modo Pipeline de Curriculo: Etapa 1 analise ATS; Etapa 2 reescrita "
-        "otimizada; Etapa 3 score pos-geracao. Manter apenas fatos verdadeiros."
-    )
-
-
 def _system_prompt() -> str:
     return (
         "Voce e o motor do modo-pipeline-curriculo. Responda somente em JSON.\n\n"
         "Metodologia versionada do modo:\n"
-        f"{_read_spec()}\n\n"
+        f"{obter_prompt(PROMPT_REESCRITA).texto}\n\n"
         "Regra de ouro multiusuario: use somente fatos presentes no perfil-mestre "
         "e no contexto factual deste request. Uma tecnologia da vaga so pode "
         "entrar no CV se existir nesses dados do usuario autenticado."
@@ -868,6 +846,7 @@ def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
         analise_inicial=inicial,
         analise_final=final,
         degradacao=degradacao,
+        prompt_version=obter_prompt(PROMPT_REESCRITA).rotulo,
     )
 
 
@@ -912,4 +891,5 @@ def reduzir_curriculo(
         analise_inicial=inicial,
         analise_final=final,
         degradacao=degradacao,
+        prompt_version=obter_prompt(PROMPT_REESCRITA).rotulo,
     )
