@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -91,6 +91,7 @@ class ReduzirCvRequest(GenerateCvRequest):
 
 class AtsAnalysis(CamelModel):
     score: int
+    score_versao: int = 2
     keywords_encontradas: list[str] = []
     keywords_criticas_ausentes: list[str] = []
     pontos_eliminatorios: list[str] = []
@@ -111,14 +112,21 @@ class ScoreRequest(CamelModel):
 
 
 class ScoreBreakdown(CamelModel):
-    keyword_match: int
-    densidade: int
-    secoes: int
+    keyword_match: int = Field(
+        description="Percentual do peso das keywords da vaga presente no curriculo, cada termo contado uma unica vez"
+    )
+    densidade: int = Field(
+        description="Percentual do peso das keywords da vaga sustentado na secao de experiencia; repeticao nao conta"
+    )
+    secoes: int = Field(
+        description="Percentual das secoes obrigatorias reconhecidas por heading de nivel 2"
+    )
     faltando: list[str] = []
 
 
 class ScoreResponse(CamelModel):
     score: int
+    score_versao: int = 2
     breakdown: ScoreBreakdown
 
 

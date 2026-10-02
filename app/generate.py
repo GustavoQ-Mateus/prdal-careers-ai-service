@@ -15,6 +15,7 @@ from .schemas import (
     PerfilMestre,
 )
 from .score import calcular_score
+from .secoes import cabecalhos
 from .text import content_tokens, normalize
 
 JOB_HEADER_RE = re.compile(r"^\*\*(.+?)\*\*\s*\|\s*(.+?)\s*\|\s*(.+?)\s*$")
@@ -357,23 +358,7 @@ def _idioma(req: GenerateCvRequest) -> str:
 
 
 def _cabecalhos(idioma: str) -> dict[str, str]:
-    if idioma == "en":
-        return {
-            "resumo": "PROFESSIONAL SUMMARY", "competencias": "SKILLS",
-            "experiencia": "PROFESSIONAL EXPERIENCE", "formacao": "EDUCATION",
-            "certificacoes": "CERTIFICATIONS", "idiomas": "LANGUAGES",
-        }
-    if idioma == "es":
-        return {
-            "resumo": "RESUMEN PROFESIONAL", "competencias": "COMPETENCIAS",
-            "experiencia": "EXPERIENCIA PROFESIONAL", "formacao": "FORMACIÓN ACADÉMICA",
-            "certificacoes": "CERTIFICACIONES", "idiomas": "IDIOMAS",
-        }
-    return {
-        "resumo": "RESUMO PROFISSIONAL", "competencias": "COMPETÊNCIAS",
-        "experiencia": "EXPERIÊNCIA PROFISSIONAL", "formacao": "FORMAÇÃO ACADÊMICA",
-        "certificacoes": "CERTIFICAÇÕES", "idiomas": "IDIOMAS",
-    }
+    return cabecalhos(idioma)
 
 
 def _texto_experiencia(experiencia: ExperienciaPerfil) -> str:
@@ -771,6 +756,7 @@ def _analise(markdown: str, req: GenerateCvRequest) -> AtsAnalysis:
     )
     return AtsAnalysis(
         score=score.score,
+        score_versao=score.score_versao,
         keywords_encontradas=encontradas,
         keywords_criticas_ausentes=ausentes,
         pontos_eliminatorios=pontos,
