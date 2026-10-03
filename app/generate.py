@@ -35,6 +35,7 @@ class KeywordsUnavailable(ValueError):
 
 
 PROMPT_REESCRITA = "reescrita"
+MARCADOR_CONTATO = "[CONTATO]"
 
 TECH_CATALOG = (
     "django", "next.js", "nextjs", "kafka", "laravel", "vue", "ruby", "rails",
@@ -120,8 +121,9 @@ def _user(
         "apagar o bullet de maior responsabilidade tecnica ja registrada.\n\n"
         "Contrato obrigatorio do Markdown:\n"
         "- Primeira linha: '# NOME'. Segunda linha util: '**Titulo profissional**'. "
-        "Depois, uma unica linha de contato no corpo. Nome e titulo nunca ficam na "
-        "mesma linha.\n"
+        f"Terceira linha util: apenas o marcador {MARCADOR_CONTATO}; o sistema o "
+        "substitui pelo contato do candidato, que nao e enviado a voce. Nome e "
+        "titulo nunca ficam na mesma linha.\n"
         f"- Use como titulo profissional '{titulo_seguro}', sem nome da empresa.\n"
         "- Secoes exatamente nesta ordem e com estes titulos literais: "
         f"{secoes_obrigatorias}. Nao traduza, nao use sinonimos e nao troque "
@@ -153,7 +155,7 @@ def _user(
         "- Nao afirme nenhuma tecnologia, empresa, metrica, autoria ou senioridade "
         "que nao exista no perfil-mestre ou no contexto factual deste request.\n\n"
         f"Erros a corrigir nesta tentativa:\n{reparos}\n\n"
-        f"Perfil-mestre:\n{req.perfil_mestre.model_dump_json()}\n\n"
+        f"Perfil-mestre:\n{req.perfil_mestre.model_dump_json(exclude={'contato'})}\n\n"
         f"Vaga: {req.vaga.titulo} @ {req.vaga.empresa}\n"
         f"Descricao da vaga:\n{req.vaga.descricao}\n\n"
         f"Palavras-chave a priorizar: {termos}\n\n"
@@ -530,6 +532,9 @@ def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
     uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
     if len(uteis) >= 3 and contato and not linhas[uteis[2]].startswith("#"):
         linhas[uteis[2]] = contato
+    elif len(uteis) >= 2 and contato:
+        linhas[uteis[1] + 1:uteis[1] + 1] = ["", contato]
+    linhas = [linha for linha in linhas if linha.strip() != MARCADOR_CONTATO]
     return "\n".join(linhas).strip()
 
 
@@ -549,7 +554,9 @@ def _erros_contrato(markdown: str, req: GenerateCvRequest) -> list[str]:
         erros.append("cabecalho de nome invalido")
     if len(linhas_uteis) < 2 or not re.fullmatch(r"\*\*.+\*\*", linhas_uteis[1]):
         erros.append("titulo profissional ausente")
-    if len(linhas_uteis) < 3 or linhas_uteis[2].startswith("#"):
+    if _linha_contato(req.perfil_mestre.contato) and (
+        len(linhas_uteis) < 3 or linhas_uteis[2].startswith("#")
+    ):
         erros.append("linha de contato ausente")
     posicoes = []
     for secao in h.values():
