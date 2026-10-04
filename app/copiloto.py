@@ -1,15 +1,23 @@
-import copy
 import json
 import re
 import unicodedata
 import uuid
 from typing import Any
 
+from .contexto import (
+    MARCA_DADO,
+    contador,
+    dado_nao_confiavel,
+    marcar_cache_no_fim,
+    mensagens_para_api,
+    montar_contexto,
+    nomes_por_id,
+    texto_do_resultado,
+)
 from .llm import LLMUnavailable, ValidacaoSemantica, complete_model, responder_com_tools
 from .schemas import (
     FormularioLlm,
     MensagemLlm,
-    MensagemNativa,
     PerfilMestre,
     RedigirFormularioRequest,
     RedigirFormularioResponse,
@@ -21,7 +29,7 @@ from .schemas import (
 
 ESFORCO_TURNO = "medium"
 ESFORCO_REDACAO = "medium"
-MARCA_DADO = "dado_nao_confiavel"
+
 
 SYSTEM_TURNO = (
     "Voce e o copiloto de candidatura do PRDAL Careers. Ajuda o candidato a preparar e "
@@ -103,39 +111,27 @@ def _chamada(tool: str, args: dict[str, Any] | None = None) -> TurnResponse:
 def _textos_do_candidato(req: TurnRequest) -> list[str]:
     return [
         bloco.model_extra.get("text", "")
-        for mensagem in req.mensagens
+        for mensagem in req.todas_as_mensagens()
         if mensagem.role == "user"
         for bloco in mensagem.content
         if bloco.type == "text"
     ]
 
 
-def _nomes_por_id(mensagens: list[MensagemNativa]) -> dict[str, str]:
-    return {
-        str(bloco.model_extra.get("id")): str(bloco.model_extra.get("name"))
-        for mensagem in mensagens
-        if mensagem.role == "assistant"
-        for bloco in mensagem.content
-        if bloco.type == "tool_use"
-    }
-
-
 def _ultimo_resultado(req: TurnRequest) -> tuple[str, str] | None:
-    if not req.mensagens or req.mensagens[-1].role != "user":
+    mensagens = req.todas_as_mensagens()
+    if not mensagens or mensagens[-1].role != "user":
         return None
-    resultados = [bloco for bloco in req.mensagens[-1].content if bloco.type == "tool_result"]
+    resultados = [bloco for bloco in mensagens[-1].content if bloco.type == "tool_result"]
     if not resultados:
         return None
     ultimo = resultados[-1].model_extra
-    nome = _nomes_por_id(req.mensagens).get(str(ultimo.get("tool_use_id")))
-    conteudo = ultimo.get("content", "")
-    if isinstance(conteudo, list):
-        conteudo = "".join(item.get("text", "") for item in conteudo if isinstance(item, dict))
-    return (nome or "", str(conteudo))
+    nome = nomes_por_id(mensagens).get(str(ultimo.get("tool_use_id")))
+    return (nome or "", texto_do_resultado(ultimo.get("content")))
 
 
 def _regerar_por_perfil_atualizado(req: TurnRequest) -> TurnResponse | None:
-    if not req.oportunidade_id or not req.mensagens:
+    if not req.oportunidade_id or not req.todas_as_mensagens():
         return None
     ultimas_mensagens = [_normalizar_intencao(texto) for texto in _textos_do_candidato(req)][-2:]
     contexto = " ".join(ultimas_mensagens)
@@ -212,51 +208,6 @@ def _narracao_ats_concluida(req: TurnRequest) -> TurnResponse | None:
     return TurnResponse(conteudo=[{"type": "text", "text": texto}], parada="end_turn")
 
 
-def dado_nao_confiavel(fonte: str, conteudo: str) -> str:
-    seguro = conteudo.replace(f"</{MARCA_DADO}", f"<\\/{MARCA_DADO}")
-    return f'<{MARCA_DADO} fonte="{fonte}">\n{seguro}\n</{MARCA_DADO}>'
-
-
-def _texto_do_resultado(conteudo: Any) -> str:
-    if isinstance(conteudo, list):
-        return "".join(item.get("text", "") for item in conteudo if isinstance(item, dict))
-    return "" if conteudo is None else str(conteudo)
-
-
-def mensagens_para_api(mensagens: list[MensagemNativa]) -> list[dict[str, Any]]:
-    nomes = _nomes_por_id(mensagens)
-    saida: list[dict[str, Any]] = []
-    for mensagem in mensagens:
-        blocos = []
-        for bloco in mensagem.content:
-            dados = bloco.model_dump()
-            if bloco.type == "tool_result":
-                fonte = nomes.get(str(dados.get("tool_use_id")), "tool")
-                dados["content"] = dado_nao_confiavel(fonte, _texto_do_resultado(dados.get("content")))
-                if not dados.get("is_error"):
-                    dados.pop("is_error", None)
-            if bloco.type == "text" and not str(dados.get("text", "")).strip():
-                continue
-            blocos.append(dados)
-        if not blocos:
-            continue
-        if saida and saida[-1]["role"] == mensagem.role:
-            saida[-1]["content"].extend(blocos)
-        else:
-            saida.append({"role": mensagem.role, "content": blocos})
-    if not saida or saida[0]["role"] != "user":
-        saida.insert(0, {"role": "user", "content": [{"type": "text", "text": "Inicio da conversa."}]})
-    if saida[-1]["role"] != "user":
-        saida.append({"role": "user", "content": [{"type": "text", "text": "Continue."}]})
-    return saida
-
-
-def _marcar_cache_no_fim(mensagens: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    marcadas = copy.deepcopy(mensagens)
-    marcadas[-1]["content"][-1]["cache_control"] = {"type": "ephemeral"}
-    return marcadas
-
-
 def tools_para_api(req: TurnRequest) -> list[dict[str, Any]]:
     return [tool.model_dump(exclude_none=True) for tool in req.tools]
 
@@ -268,13 +219,16 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
     narracao = _narracao_ats_concluida(req)
     if narracao:
         return narracao
-    blocos, parada = responder_com_tools(
+    system = [{"type": "text", "text": SYSTEM_TURNO, "cache_control": {"type": "ephemeral"}}]
+    payload, resumo = montar_contexto(req, system, tools_para_api(req))
+    blocos, parada, entrada = responder_com_tools(
         SYSTEM_TURNO,
-        _marcar_cache_no_fim(mensagens_para_api(req.mensagens)),
-        tools_para_api(req),
+        payload["messages"],
+        payload["tools"],
         chamador="copiloto_turno",
         esforco=ESFORCO_TURNO,
     )
+    contador.calibrar(payload, entrada)
     conteudo: list[dict[str, Any]] = []
     for bloco in blocos:
         if bloco.get("type") == "text":
@@ -285,7 +239,7 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
         conteudo.append(bloco)
     if not any(bloco.get("type") in ("text", "tool_use") for bloco in conteudo):
         raise LLMUnavailable("turno sem texto e sem tool")
-    return TurnResponse(conteudo=conteudo, parada=parada)
+    return TurnResponse(conteudo=conteudo, parada=parada, resumo=resumo)
 
 
 SYSTEM_MENSAGEM = (

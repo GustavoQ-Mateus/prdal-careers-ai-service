@@ -414,7 +414,7 @@ def responder_com_tools(
     chamador: str,
     esforco: str,
     max_tokens: int | None = None,
-) -> tuple[list[dict[str, Any]], str]:
+) -> tuple[list[dict[str, Any]], str, int]:
     if esforco not in ESFORCOS:
         raise ValueError(f"esforco invalido: {esforco}")
     modelo = modelo_configurado()
@@ -437,7 +437,12 @@ def responder_com_tools(
     }
     resposta = _chamar(requisicao, operacao_atual(), rotulo)
     _parada_aceitavel(resposta)
-    return [_bloco_dict(bloco) for bloco in resposta.content], str(resposta.stop_reason)
+    usage = getattr(resposta, "usage", None)
+    entrada = sum(
+        getattr(usage, campo, 0) or 0
+        for campo in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+    )
+    return [_bloco_dict(bloco) for bloco in resposta.content], str(resposta.stop_reason), entrada
 
 
 def complete_model(

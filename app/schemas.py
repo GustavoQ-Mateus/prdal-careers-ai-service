@@ -350,16 +350,41 @@ class ToolNativa(BaseModel):
     strict: bool | None = None
 
 
+class Troca(CamelModel):
+    indice: int
+    mensagens: list[MensagemNativa]
+
+
+class ResumoConversa(CamelModel):
+    texto: str
+    ate: int
+
+
 class TurnRequest(CamelModel):
     modo: str = "assistido"
     oportunidade_id: str | None = None
     mensagens: list[MensagemNativa] = []
+    trocas: list[Troca] = []
+    resumo: ResumoConversa | None = None
     tools: list[ToolNativa] = []
+
+    def todas_as_trocas(self) -> list[Troca]:
+        if self.trocas:
+            return self.trocas
+        return [Troca(indice=0, mensagens=self.mensagens)] if self.mensagens else []
+
+    def todas_as_mensagens(self) -> list[MensagemNativa]:
+        return [mensagem for troca in self.todas_as_trocas() for mensagem in troca.mensagens]
 
 
 class TurnResponse(ComUso):
     conteudo: list[dict[str, Any]] = []
     parada: str = "end_turn"
+    resumo: ResumoConversa | None = None
+
+
+class ResumoLlm(CamelModel):
+    resumo: str
 
 
 class RedigirMensagemRequest(CamelModel):
