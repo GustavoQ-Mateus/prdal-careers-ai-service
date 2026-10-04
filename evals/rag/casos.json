@@ -1,0 +1,79 @@
+[
+  {
+    "id": "corpus_variado",
+    "mede": "recall@5 das notas que tratam da keyword, com sinonimo sem o termo literal, texto em ingles, nota em dois paragrafos e notas sem relacao misturadas",
+    "documentos": [
+      {"id": "n-docker", "tipo": "nota", "texto": "Conteinerizei a API de pedidos com Docker e escrevi o docker-compose usado pelo time no ambiente local."},
+      {"id": "n-k8s", "tipo": "nota", "texto": "Na Empresa Exemplo operei os deploys em um cluster Kubernetes usando Helm e rollouts graduais.\n\nTambem escrevi os alertas do Prometheus e os paineis do Grafana para acompanhar a saude dos servicos."},
+      {"id": "n-aws", "tipo": "nota", "texto": "Movi o processamento de arquivos para funcoes Lambda na AWS, guardando os arquivos no S3 e as mensagens em filas SQS."},
+      {"id": "n-planilhas", "tipo": "nota", "texto": "Montei planilhas eletronicas com tabelas dinamicas e PROCV para o fechamento financeiro de cada mes."},
+      {"id": "n-bi", "tipo": "nota", "texto": "Desenhei paineis de indicadores comerciais no Power BI para os gerentes regionais acompanharem as vendas."},
+      {"id": "n-consultas", "tipo": "nota", "texto": "Reescrevi consultas lentas no banco relacional com indices e CTEs, e o relatorio mensal passou a rodar em minutos."},
+      {"id": "n-react", "tipo": "nota", "texto": "Construi as telas do portal do cliente em React com TypeScript e testes de componente."},
+      {"id": "n-uti", "tipo": "nota", "texto": "Fiz plantoes noturnos na UTI adulto cuidando de pacientes em ventilacao mecanica."},
+      {"id": "n-infeccao", "tipo": "nota", "texto": "Realizei curativos complexos e acoes de controle de infeccao hospitalar na clinica cirurgica."},
+      {"id": "n-negociacao", "tipo": "nota", "texto": "Conduzi a renegociacao dos contratos dos maiores clientes e reduzi o desconto medio concedido."},
+      {"id": "n-salesforce", "tipo": "nota", "texto": "Organizei o funil comercial no Salesforce e treinei os SDRs a registrar cada oportunidade."},
+      {"id": "n-ingles", "tipo": "nota", "texto": "Led weekly meetings in English with the client team in Toronto and wrote the sprint reports."},
+      {"id": "n-scrum", "tipo": "nota", "texto": "Fui scrum master do time por um ano, facilitando dailies, planejamentos e retrospectivas."},
+      {"id": "n-git", "tipo": "nota", "texto": "Padronizei o fluxo de branches e as revisoes de codigo no GitHub para todo o time."},
+      {"id": "c-dados", "tipo": "candidatura", "texto": "Candidatura para Analista de Dados: na segunda etapa o recrutador pediu um case com SQL e Power BI."},
+      {"id": "s-bolo", "tipo": "nota", "semRelacao": true, "texto": "Receita de bolo de cenoura com cobertura de chocolate para o domingo."},
+      {"id": "s-viagem", "tipo": "nota", "semRelacao": true, "texto": "Viagem de ferias para o litoral em janeiro com a familia."},
+      {"id": "s-compras", "tipo": "nota", "semRelacao": true, "texto": "Lista de compras: arroz, feijao, cafe e frutas."},
+      {"id": "s-futebol", "tipo": "nota", "semRelacao": true, "texto": "Resultado do jogo de futebol de domingo com os amigos do bairro."},
+      {"id": "s-carro", "tipo": "nota", "semRelacao": true, "texto": "Lembrar de renovar o documento do carro em marco."},
+      {"id": "s-academia", "tipo": "nota", "semRelacao": true, "texto": "Treino na academia tres vezes por semana, sempre de manha."},
+      {"id": "s-dentista", "tipo": "nota", "semRelacao": true, "texto": "Consulta no dentista marcada para quinta-feira as nove horas."}
+    ],
+    "consultas": [
+      {"termo": "Docker", "esperados": ["n-docker"]},
+      {"termo": "Kubernetes", "esperados": ["n-k8s#1"]},
+      {"termo": "monitoramento", "esperados": ["n-k8s#2"]},
+      {"termo": "AWS", "esperados": ["n-aws"]},
+      {"termo": "Excel", "esperados": ["n-planilhas"]},
+      {"termo": "Power BI", "esperados": ["n-bi", "c-dados"]},
+      {"termo": "SQL", "esperados": ["n-consultas", "c-dados"]},
+      {"termo": "React", "esperados": ["n-react"]},
+      {"termo": "UTI", "esperados": ["n-uti"]},
+      {"termo": "ventilacao mecanica", "esperados": ["n-uti"]},
+      {"termo": "controle de infeccao", "esperados": ["n-infeccao"]},
+      {"termo": "negociacao", "esperados": ["n-negociacao"]},
+      {"termo": "Salesforce", "esperados": ["n-salesforce"]},
+      {"termo": "ingles", "esperados": ["n-ingles"]},
+      {"termo": "Scrum", "esperados": ["n-scrum"]},
+      {"termo": "Git", "esperados": ["n-git"]}
+    ]
+  },
+  {
+    "id": "nada_passa",
+    "mede": "so notas sem relacao: nenhuma pode passar do limiar para nenhuma keyword",
+    "documentos": [
+      {"id": "s-bolo", "tipo": "nota", "semRelacao": true, "texto": "Receita de bolo de cenoura com cobertura de chocolate para o domingo."},
+      {"id": "s-viagem", "tipo": "nota", "semRelacao": true, "texto": "Viagem de ferias para o litoral em janeiro com a familia."},
+      {"id": "s-compras", "tipo": "nota", "semRelacao": true, "texto": "Lista de compras: arroz, feijao, cafe e frutas."},
+      {"id": "s-futebol", "tipo": "nota", "semRelacao": true, "texto": "Resultado do jogo de futebol de domingo com os amigos do bairro."},
+      {"id": "s-carro", "tipo": "nota", "semRelacao": true, "texto": "Lembrar de renovar o documento do carro em marco."},
+      {"id": "s-academia", "tipo": "nota", "semRelacao": true, "texto": "Treino na academia tres vezes por semana, sempre de manha."},
+      {"id": "s-dentista", "tipo": "nota", "semRelacao": true, "texto": "Consulta no dentista marcada para quinta-feira as nove horas."},
+      {"id": "s-filme", "tipo": "nota", "semRelacao": true, "texto": "Filmes para assistir no fim de semana: uma comedia e um documentario sobre o oceano."}
+    ],
+    "consultas": [
+      {"termo": "Docker", "esperados": []},
+      {"termo": "Kubernetes", "esperados": []},
+      {"termo": "AWS", "esperados": []},
+      {"termo": "Excel", "esperados": []},
+      {"termo": "Power BI", "esperados": []},
+      {"termo": "SQL", "esperados": []},
+      {"termo": "Python", "esperados": []},
+      {"termo": "Java", "esperados": []},
+      {"termo": "UTI", "esperados": []},
+      {"termo": "enfermagem", "esperados": []},
+      {"termo": "negociacao", "esperados": []},
+      {"termo": "vendas", "esperados": []},
+      {"termo": "ingles", "esperados": []},
+      {"termo": "contabilidade", "esperados": []},
+      {"termo": "APIs REST", "esperados": []}
+    ]
+  }
+]

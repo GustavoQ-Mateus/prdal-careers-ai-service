@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
     relatorio = {
         "conjunto": args.conjunto,
-        "modelo": "falso" if args.falso else os.getenv("AI_MODEL"),
+        "modelo": modulo.modelo(args.falso) if hasattr(modulo, "modelo") else ("falso" if args.falso else os.getenv("AI_MODEL")),
         "falso": args.falso,
         "casos": len(resultados),
         "metricas": resumo,

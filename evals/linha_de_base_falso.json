@@ -110,14 +110,16 @@
     "metricas": {
       "recall_at_5": {
         "direcao": "maior",
-        "valor": null,
+        "valor": 0.7812,
         "limiar": 0.05
       },
       "sem_relacao_acima_do_limiar": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 0,
         "absoluto": 0
       }
-    }
+    },
+    "gravadaEm": "2026-10-04",
+    "modelo": "falso"
   }
 }
