@@ -17,7 +17,7 @@ from .juiz import FraseJulgada, julgar
 
 NOME = "geracao"
 PASTA = Path(__file__).resolve().parent
-TRAVESSOES = ("—", "–")
+TRAVESSOES = ("\u2014", "\u2013")
 MARCAS_INTERNAS = ("{{", "}}", "[[", "]]")
 _SECAO_RE = re.compile(r"^## (.+)$", re.MULTILINE)
 

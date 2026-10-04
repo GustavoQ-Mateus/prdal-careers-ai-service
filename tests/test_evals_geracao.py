@@ -68,7 +68,7 @@ class MetricasDeGeracaoTest(unittest.TestCase):
         req = conjunto.requisicao(caso)
         bullets = [FraseFonte(texto=f"Item {i}", fontes=["cooperativa"]) for i in range(6)]
         estrutura = EstruturaCurriculo(experiencias=[ExperienciaEstruturada(experiencia_id="cooperativa", bullets=bullets)])
-        markdown = "# Pessoa\n\n## RESUMO PROFISSIONAL\n\n## EXPERIENCIA\n- Fiz algo — bem"
+        markdown = "# Pessoa\n\n## RESUMO PROFISSIONAL\n\n## EXPERIENCIA\n- Fiz algo \u2014 bem"
         violacoes = conjunto.violacoes_de_formato(markdown, estrutura, req)
         self.assertIn("secao vazia: RESUMO PROFISSIONAL", violacoes)
         self.assertTrue(any(v.startswith("travessao") for v in violacoes))
