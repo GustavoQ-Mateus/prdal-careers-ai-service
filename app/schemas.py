@@ -65,25 +65,74 @@ class Vaga(CamelModel):
         ]
 
 
+class EmailContato(CamelModel):
+    valor: str = ""
+    principal: bool = False
+
+
+class TelefoneContato(CamelModel):
+    ddi: str = ""
+    numero: str = ""
+    principal: bool = False
+
+
+class LinkContato(CamelModel):
+    tipo: str = ""
+    url: str = ""
+
+
+class Local(CamelModel):
+    pais: str = ""
+    estado: str = ""
+    cidade: str = ""
+
+
 class ExperienciaPerfil(CamelModel):
     id: str = ""
     cargo: str = ""
     empresa: str = ""
-    periodo: str = ""
-    local: str = ""
+    data_inicio_mes: int | None = None
+    data_inicio_ano: int | None = None
+    data_fim_mes: int | None = None
+    data_fim_ano: int | None = None
+    atual: bool = False
+    local: Local | None = None
+    local_legado: str = ""
+    periodo_legado: str = ""
     descricao: str = ""
-    tecnologias: list[str] = []
     realizacoes: list[str] = []
     texto: str = ""
 
 
+class Formacao(CamelModel):
+    grau: str = ""
+    status: str = ""
+    instituicao: str = ""
+    curso: str = ""
+    inicio_mes: int | None = None
+    inicio_ano: int | None = None
+    fim_mes: int | None = None
+    fim_ano: int | None = None
+
+
+class Certificacao(CamelModel):
+    titulo: str = ""
+    descricao: str = ""
+
+
+CAMPOS_CONTATO = {"emails", "telefones", "links", "endereco"}
+
+
 class PerfilMestre(CamelModel):
     nome: str = ""
-    contato: dict[str, Any] = {}
+    emails: list[EmailContato] = []
+    telefones: list[TelefoneContato] = []
+    links: list[LinkContato] = []
+    endereco: Local | None = None
     resumo: str = ""
     experiencias: list[ExperienciaPerfil] = []
-    formacao: list[str] = []
-    certificacoes: list[str] = []
+    formacao: list[Formacao] = []
+    certificacoes: list[Certificacao] = []
     idiomas: list[str] = []
     skills: list[str] = []
 

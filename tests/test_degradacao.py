@@ -24,7 +24,7 @@ def _req() -> GenerateCvRequest:
                 "nome": "Pessoa",
                 "skills": ["Python"],
                 "experiencias": [
-                    {"empresa": "A", "cargo": "Dev", "periodo": "01/2024 - atual", "descricao": "- Atuei com Python."}
+                    {"empresa": "A", "cargo": "Dev", "dataInicioMes": 1, "dataInicioAno": 2024, "atual": True, "descricao": "- Atuei com Python."}
                 ],
             },
             "vaga": {"titulo": "Dev Python", "descricao": "Python"},

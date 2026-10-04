@@ -39,8 +39,10 @@ PERFIL = {
         {
             "cargo": "Desenvolvedora Backend",
             "empresa": "Companhia Ficticia",
-            "periodo": "01/2022 - atual",
-            "tecnologias": ["Python", "FastAPI", "PostgreSQL", "Docker"],
+            "dataInicioMes": 1,
+            "dataInicioAno": 2022,
+            "atual": True,
+            "descricao": "Tecnologias: Python, FastAPI, PostgreSQL, Docker",
             "realizacoes": [
                 "Desenvolvi APIs REST em Python com FastAPI para o modulo de pedidos.",
                 "Participei da migracao do banco para PostgreSQL com o time de dados.",

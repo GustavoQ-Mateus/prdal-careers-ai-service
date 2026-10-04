@@ -15,20 +15,22 @@ from app.schemas import (
 
 EMAIL = "pessoa.privada@exemplo.dev"
 TELEFONE = "+55 85 99999-1234"
-ENDERECO = "Rua das Flores, 123, Fortaleza"
-DADOS_PESSOAIS = (EMAIL, TELEFONE, "99999-1234", ENDERECO, "Rua das Flores")
+LINKEDIN = "linkedin.com/in/pessoa-privada"
+DADOS_PESSOAIS = (EMAIL, "99999-1234", LINKEDIN, "Fortaleza")
 
 PERFIL = {
     "nome": "Pessoa Candidata",
-    "contato": {"email": EMAIL, "telefone": TELEFONE, "endereco": ENDERECO},
+    "emails": [{"valor": "outro@exemplo.dev", "principal": False}, {"valor": EMAIL, "principal": True}],
+    "telefones": [{"ddi": "+55", "numero": "85 99999-1234", "principal": True}],
+    "links": [{"tipo": "linkedin", "url": LINKEDIN}],
+    "endereco": {"pais": "Brasil", "estado": "CE", "cidade": "Fortaleza"},
     "resumo": "Desenvolvedora back-end com APIs REST em Python.",
     "experiencias": [
         {
             "empresa": "Empresa A",
             "cargo": "Desenvolvedora Back-end",
-            "periodo": "01/2023 - atual",
+            "dataInicioMes": 1, "dataInicioAno": 2023, "atual": True,
             "descricao": "- Desenvolvi APIs REST com Python e FastAPI em producao.",
-            "tecnologias": ["Python", "FastAPI"],
         }
     ],
     "skills": ["Python", "FastAPI"],
@@ -89,6 +91,8 @@ class ContatoMontadoPorCodigoTest(unittest.TestCase):
         linhas = [linha for linha in markdown.splitlines() if linha.strip()]
         self.assertIn(EMAIL, linhas[2])
         self.assertIn(TELEFONE, linhas[2])
+        self.assertIn("Fortaleza - CE", linhas[2])
+        self.assertNotIn("outro@exemplo.dev", linhas[2])
         self.assertNotIn(MARCADOR_CONTATO, markdown)
 
     def test_contato_omitido_pelo_modelo_e_inserido(self):
@@ -99,7 +103,10 @@ class ContatoMontadoPorCodigoTest(unittest.TestCase):
 
     def test_sem_contato_no_perfil_o_marcador_some(self):
         req = _req()
-        req.perfil_mestre.contato = {}
+        req.perfil_mestre.emails = []
+        req.perfil_mestre.telefones = []
+        req.perfil_mestre.links = []
+        req.perfil_mestre.endereco = None
         markdown = _limpar_markdown(
             f"# Pessoa Candidata\n**Desenvolvedora Python**\n{MARCADOR_CONTATO}\n\n## RESUMO\nTexto.", req
         )

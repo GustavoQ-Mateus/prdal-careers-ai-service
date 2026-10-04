@@ -18,14 +18,16 @@ from tests.cliente_falso import ComClienteFalso, resposta
 def _perfil(nome: str, empresa: str, tecnologia: str) -> dict:
     return {
         "nome": nome,
-        "contato": {"email": f"{nome.split()[0].lower()}@exemplo.dev"},
+        "emails": [{"valor": f"{nome.split()[0].lower()}@exemplo.dev", "principal": True}],
         "resumo": f"Pessoa desenvolvedora com foco em {tecnologia}.",
         "experiencias": [
             {
                 "cargo": "Desenvolvedora",
                 "empresa": empresa,
-                "periodo": "01/2022 - atual",
-                "tecnologias": [tecnologia],
+                "dataInicioMes": 1,
+                "dataInicioAno": 2022,
+                "atual": True,
+                "descricao": f"Tecnologias: {tecnologia}",
                 "realizacoes": [f"Desenvolvi servicos em {tecnologia} para pagamentos."],
             }
         ],

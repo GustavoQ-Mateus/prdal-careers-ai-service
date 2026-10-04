@@ -14,6 +14,7 @@ from app.generate import (
     _erros_saida,
     _limpar_markdown,
     _linha_contato,
+    _texto_perfil,
     _normalizar_cabecalho_experiencia,
     _user,
     analisar_ats,
@@ -21,7 +22,7 @@ from app.generate import (
     reduzir_curriculo,
 )
 from app.llm import LLMUnavailable
-from app.schemas import GenerateCvRequest, GenerateCvResponse
+from app.schemas import GenerateCvRequest, GenerateCvResponse, PerfilMestre
 
 
 def _req_tres_experiencias() -> GenerateCvRequest:
@@ -29,44 +30,39 @@ def _req_tres_experiencias() -> GenerateCvRequest:
         {
             "perfilMestre": {
                 "nome": "Gustavo Queiroz Mateus",
-                "contato": {
-                    "telefone": "+55 85 99120-7171",
-                    "email": "gustavoqueirozunifor@edu.unifor.br",
-                    "linkedin": "https://linkedin.com/in/gustavo-queiroz-mateus-935255283",
-                },
+                "telefones": [{"ddi": "+55", "numero": "85 99120-7171", "principal": True}],
+                "emails": [{"valor": "gustavoqueirozunifor@edu.unifor.br", "principal": True}],
+                "links": [{"tipo": "linkedin", "url": "https://linkedin.com/in/gustavo-queiroz-mateus-935255283"}],
                 "resumo": "Desenvolvedor back-end com experiência em APIs REST e sistemas em produção.",
                 "experiencias": [
                     {
                         "empresa": "Modera Road Inspector",
                         "cargo": "Desenvolvedor Full-Stack",
-                        "periodo": "06/2026 - atual",
+                        "dataInicioMes": 6, "dataInicioAno": 2026, "atual": True,
                         "descricao": (
                             "- Atuei no back-end de plataforma web em produção com Python (FastAPI) e PostgreSQL.\n"
                             "- Implementei autenticação JWT multi-tenant e filas assíncronas.\n"
                             "- Atuei na infraestrutura como código e CI/CD junto ao time."
                         ),
-                        "tecnologias": ["Python", "FastAPI", "PostgreSQL"],
                     },
                     {
                         "empresa": "Saraiva Leão · Assessoria e Cálculos Judiciais",
                         "cargo": "Desenvolvedor Full-Stack",
-                        "periodo": "03/2025 - atual",
+                        "dataInicioMes": 3, "dataInicioAno": 2025, "atual": True,
                         "descricao": (
                             "- Construí um ERP corporativo com Python (FastAPI) e MySQL em produção.\n"
                             "- Implementei autenticação JWT multiempresa com auditoria.\n"
                             "- Assumi o deploy e a sustentação em produção."
                         ),
-                        "tecnologias": ["Python", "FastAPI", "MySQL"],
                     },
                     {
                         "empresa": "Micro&Money · Softwares Inteligentes",
                         "cargo": "Estágio Full-Stack",
-                        "periodo": "01/2026 - 04/2026",
+                        "dataInicioMes": 1, "dataInicioAno": 2026, "dataFimMes": 4, "dataFimAno": 2026,
                         "descricao": "- Atuei em módulos ERP com Java (Spring Boot) sobre MySQL.",
-                        "tecnologias": ["Java", "Spring Boot", "MySQL"],
                     },
                 ],
-                "formacao": ["UNIFOR | ADS | 02/2025 - 06/2027"],
+                "formacao": [{"instituicao": "UNIFOR", "curso": "ADS", "inicioMes": 2, "inicioAno": 2025, "fimMes": 6, "fimAno": 2027}],
                 "certificacoes": [],
                 "idiomas": ["Português, nativo", "Inglês, intermediário"],
                 "skills": ["Java", "Spring Boot", "Python", "FastAPI", "PostgreSQL", "MySQL"],
@@ -92,23 +88,20 @@ class GenerateCvTest(unittest.TestCase):
             {
                 "perfilMestre": {
                     "nome": "Pessoa Teste",
-                    "contato": {
-                        "telefone": "+55 85 99999-0000",
-                        "email": "pessoa@example.com",
-                        "linkedin": "https://linkedin.com/in/pessoa",
-                    },
+                    "telefones": [{"ddi": "+55", "numero": "85 99999-0000", "principal": True}],
+                    "emails": [{"valor": "pessoa@example.com", "principal": True}],
+                    "links": [{"tipo": "linkedin", "url": "https://linkedin.com/in/pessoa"}],
                     "resumo": "Desenvolvedora backend com experiência em APIs REST e sistemas em produção.",
                     "experiencias": [
                         {
                             "empresa": "Empresa A",
                             "cargo": "Desenvolvedora Backend",
-                            "periodo": "Jun. 2024 a atual",
+                            "dataInicioMes": 6, "dataInicioAno": 2024, "atual": True,
                             "descricao": "- Atuei no desenvolvimento de APIs REST com Python e FastAPI em produção.\n- Contribuí para filas assíncronas com Redis junto ao time.",
-                            "tecnologias": ["Python", "FastAPI", "Redis"],
                         }
                     ],
-                    "formacao": ["Universidade A | ADS | 02/2023 - 12/2025"],
-                    "certificacoes": ["Python, Escola A, 2025"],
+                    "formacao": [{"instituicao": "Universidade A", "curso": "ADS", "inicioMes": 2, "inicioAno": 2023, "fimMes": 12, "fimAno": 2025}],
+                    "certificacoes": [{"titulo": "Python", "descricao": "Escola A, 2025"}],
                     "idiomas": ["Português, nativo", "Inglês, intermediário"],
                     "skills": ["Python", "FastAPI", "PostgreSQL", "Docker", "Redis"],
                 },
@@ -143,13 +136,17 @@ class GenerateCvTest(unittest.TestCase):
         self.assertIn("(https://linkedin.com/in/pessoa)", markdown)
 
     def test_linha_contato_resolve_link_real(self):
-        contato = {
-            "email": "pessoa@example.com",
-            "linkedin": "linkedin.com/in/pessoa",
-            "github": "github.com/pessoa",
-            "telefone": "+55 85 99999-0000",
-        }
-        linha = _linha_contato(contato)
+        perfil = PerfilMestre.model_validate(
+            {
+                "emails": [{"valor": "pessoa@example.com", "principal": True}],
+                "links": [
+                    {"tipo": "linkedin", "url": "linkedin.com/in/pessoa"},
+                    {"tipo": "github", "url": "github.com/pessoa"},
+                ],
+                "telefones": [{"ddi": "+55", "numero": "85 99999-0000", "principal": True}],
+            }
+        )
+        linha = _linha_contato(perfil)
 
         self.assertIn("[pessoa@example.com](mailto:pessoa@example.com)", linha)
         self.assertIn("[linkedin.com/in/pessoa](https://linkedin.com/in/pessoa)", linha)
@@ -502,6 +499,131 @@ class ErrosMetricasTest(unittest.TestCase):
         self.assertEqual(
             [], _erros_metricas("- Atuei em modulos ERP com Java.", self.req)
         )
+
+
+class PerfilEstruturadoTest(unittest.TestCase):
+    def _req(self, descricao_vaga="Buscamos Python e APIs REST.", **perfil):
+        base = {
+            "nome": "Pessoa Teste",
+            "emails": [
+                {"valor": "secundario@example.com", "principal": False},
+                {"valor": "principal@example.com", "principal": True},
+            ],
+            "telefones": [
+                {"ddi": "+55", "numero": "85 90000-0001", "principal": False},
+                {"ddi": "+55", "numero": "85 90000-0002", "principal": True},
+            ],
+            "links": [{"tipo": "github", "url": "github.com/pessoa"}],
+            "endereco": {"pais": "Brasil", "estado": "CE", "cidade": "Fortaleza"},
+            "experiencias": [
+                {
+                    "empresa": "Antiga",
+                    "cargo": "Estagiaria",
+                    "dataInicioMes": 1,
+                    "dataInicioAno": 2019,
+                    "dataFimMes": 12,
+                    "dataFimAno": 2020,
+                    "descricao": "- Atuei com Python.",
+                },
+                {
+                    "empresa": "Atual",
+                    "cargo": "Desenvolvedora",
+                    "dataInicioMes": 3,
+                    "dataInicioAno": 2023,
+                    "atual": True,
+                    "descricao": "- Atuei com APIs REST em Python.",
+                },
+                {
+                    "empresa": "Intermediaria",
+                    "cargo": "Desenvolvedora Jr",
+                    "dataInicioMes": 2,
+                    "dataInicioAno": 2021,
+                    "dataFimMes": 2,
+                    "dataFimAno": 2023,
+                    "descricao": "- Atuei com Python.",
+                },
+            ],
+            "formacao": [
+                {"grau": "Tecnologo", "curso": "ADS", "instituicao": "Universidade A", "status": "em_andamento", "inicioMes": 2, "inicioAno": 2023},
+            ],
+            "certificacoes": [{"titulo": "Python", "descricao": "Escola A, 2025"}],
+            "skills": ["Python"],
+        }
+        base.update(perfil)
+        return GenerateCvRequest.model_validate(
+            {
+                "perfilMestre": base,
+                "vaga": {"titulo": "Desenvolvedora Python", "descricao": descricao_vaga},
+                "keywords": [{"termo": "Python", "peso": 1}],
+            }
+        )
+
+    def test_cabecalho_usa_so_os_principais_e_cidade_uf(self):
+        linha = _linha_contato(self._req().perfil_mestre)
+        self.assertEqual(
+            "+55 85 90000-0002 | [principal@example.com](mailto:principal@example.com) | Fortaleza - CE"
+            " | [github.com/pessoa](https://github.com/pessoa)",
+            linha,
+        )
+
+    def test_sem_cidade_estruturada_o_cabecalho_nao_inventa_local(self):
+        req = self._req(endereco=None)
+        self.assertNotIn("Fortaleza", _linha_contato(req.perfil_mestre))
+
+    def test_periodo_e_ordem_vem_das_datas_estruturadas(self):
+        markdown = _deterministic_request(self._req())
+        cabecalhos = [linha for linha in markdown.splitlines() if linha.startswith("**") and "|" in linha]
+        self.assertEqual(
+            [
+                "**Atual** | Desenvolvedora | 03/2023 - atual",
+                "**Intermediaria** | Desenvolvedora Jr | 02/2021 - 02/2023",
+                "**Antiga** | Estagiaria | 01/2019 - 12/2020",
+            ],
+            cabecalhos,
+        )
+        self.assertIn("Universidade A | Tecnologo em ADS | 02/2023 - atual | em andamento", markdown)
+        self.assertIn("- Python, Escola A, 2025", markdown)
+        self.assertEqual([], _erros_ordem(markdown, self._req()))
+
+    def test_termo_de_atual_segue_o_idioma_do_curriculo(self):
+        en = self._req("Requirements: Python experience, english, we are hiring for APIs.")
+        markdown_en = _deterministic_request(en)
+        self.assertIn("**Atual** | Desenvolvedora | 03/2023 - present", markdown_en)
+        self.assertIn("Tecnologo in ADS | 02/2023 - present | in progress", markdown_en)
+        es = self._req("Buscamos desarrollador con conocimientos y habilidades en Python, trabajo remoto.")
+        self.assertIn("**Atual** | Desenvolvedora | 03/2023 - actual", _deterministic_request(es))
+
+    def test_experiencia_legada_so_com_periodo_em_texto_continua_funcionando(self):
+        req = self._req(
+            experiencias=[
+                {
+                    "empresa": "Legada",
+                    "cargo": "Monitora",
+                    "periodoLegado": "verao de 2019",
+                    "localLegado": "Remoto",
+                    "descricao": "- Atuei com Python.",
+                }
+            ]
+        )
+        markdown = _deterministic_request(req)
+        self.assertIn("**Legada** | Monitora | verao de 2019", markdown)
+        self.assertIn("Remoto", _texto_perfil(req.perfil_mestre))
+
+    def test_descricao_com_linha_de_tecnologias_autoriza_o_termo(self):
+        req = self._req(
+            experiencias=[
+                {
+                    "empresa": "A",
+                    "cargo": "Dev",
+                    "dataInicioMes": 1,
+                    "dataInicioAno": 2024,
+                    "atual": True,
+                    "descricao": "- Atuei com APIs.\nTecnologias: Redis",
+                    "realizacoes": ["Atuei com APIs."],
+                }
+            ]
+        )
+        self.assertEqual([], _erros_factualidade("Usei Redis em filas.", req))
 
 
 if __name__ == "__main__":

@@ -8,8 +8,12 @@ from .carregador_prompts import obter as obter_prompt
 from .casamento import termo_presente
 from .llm import LLMUnavailable, complete_model
 from .schemas import (
+    CAMPOS_CONTATO,
     AtsAnalysis,
+    Certificacao,
     ExperienciaPerfil,
+    Formacao,
+    Local,
     GenerateCvRequest,
     GeneratePipelineResponse,
     PerfilMestre,
@@ -114,7 +118,7 @@ def _user(
         f"Analise inicial:\n{_json_model(analise_inicial)}\n\n"
         f"Lacunas criticas autorizadas:\n{lacunas_texto}\n\n"
         f"Erros a corrigir nesta tentativa:\n{reparos}\n\n"
-        f"Perfil-mestre:\n{req.perfil_mestre.model_dump_json(exclude={'contato'})}\n\n"
+        f"Perfil-mestre:\n{req.perfil_mestre.model_dump_json(exclude=CAMPOS_CONTATO)}\n\n"
         f"Vaga: {req.vaga.titulo} @ {req.vaga.empresa}\n"
         f"Descricao da vaga:\n{req.vaga.descricao}\n\n"
         f"Palavras-chave a priorizar: {termos}\n\n"
@@ -219,31 +223,36 @@ def _titulo_vaga_seguro(titulo: str, req: GenerateCvRequest | None = None) -> st
     return limpo or "Desenvolvedor Full-Stack"
 
 
-def _url_contato(chave: str, valor: str) -> str | None:
-    if chave.startswith("email"):
-        return f"mailto:{valor}" if "@" in valor else None
-    if chave.startswith(("linkedin", "github", "site")):
-        return valor if "://" in valor else f"https://{valor}"
-    return None
+ORDEM_LINKS = ("site", "linkedin", "github", "facebook", "instagram")
 
 
-def _formatar_contato(chave: str, valor: str) -> str:
-    url = _url_contato(chave, valor)
+def _link(valor: str, url: str | None) -> str:
     return f"[{valor}]({url})" if url else valor
 
 
-def _linha_contato(contato: dict[str, Any]) -> str:
-    ordem = ["telefone", "email", "localizacao", "cidade", "site", "linkedin", "github"]
-    usados: set[str] = set()
+def _texto_local(local: Local | None) -> str:
+    if not local:
+        return ""
+    return " - ".join(parte for parte in (local.cidade.strip(), local.estado.strip()) if parte)
+
+
+def _linha_contato(perfil: PerfilMestre) -> str:
     partes: list[str] = []
-    for chave in ordem:
-        valor = contato.get(chave)
-        if valor:
-            partes.append(_formatar_contato(chave, str(valor)))
-            usados.add(chave)
-    partes.extend(
-        _formatar_contato(k, str(v)) for k, v in contato.items() if k not in usados and v
-    )
+    telefone = next((t for t in perfil.telefones if t.principal and t.numero.strip()), None)
+    if telefone:
+        partes.append(" ".join(p for p in (telefone.ddi.strip(), telefone.numero.strip()) if p))
+    email = next((e for e in perfil.emails if e.principal and e.valor.strip()), None)
+    if email:
+        valor = email.valor.strip()
+        partes.append(_link(valor, f"mailto:{valor}" if "@" in valor else None))
+    local = _texto_local(perfil.endereco)
+    if local:
+        partes.append(local)
+    for tipo in ORDEM_LINKS:
+        for link in perfil.links:
+            url = link.url.strip()
+            if link.tipo == tipo and url:
+                partes.append(_link(url, url if "://" in url else f"https://{url}"))
     return " | ".join(partes)
 
 
@@ -313,25 +322,81 @@ def _nucleo_empresa(empresa: str) -> str:
     return re.split(r"\s*[·|,\-\u2013\u2014/]\s*", empresa.strip(), maxsplit=1)[0].strip()
 
 
-def _experiencia_atual(experiencia: ExperienciaPerfil) -> bool:
-    return _parse_periodo(experiencia.periodo)[0]
+TERMO_ATUAL = {"pt": "atual", "en": "present", "es": "actual"}
+STATUS_FORMACAO = {
+    "pt": {"concluido": "concluído", "em_andamento": "em andamento", "trancado": "trancado"},
+    "en": {"concluido": "completed", "em_andamento": "in progress", "trancado": "on hold"},
+    "es": {"concluido": "concluido", "em_andamento": "en curso", "trancado": "interrumpido"},
+}
 
 
-def _ordenar_experiencias(
-    experiencias: list[ExperienciaPerfil], idioma: str
-) -> list[ExperienciaPerfil]:
-    return sorted(
-        experiencias,
-        key=lambda e: _chave_recencia(_periodo_mm_aaaa(e.periodo, idioma)),
-        reverse=True,
+def _mes_ano(mes: int | None, ano: int | None) -> str:
+    if ano is None:
+        return ""
+    return f"{mes:02d}/{ano}" if mes else str(ano)
+
+
+def _periodo_experiencia(experiencia: ExperienciaPerfil, idioma: str) -> str:
+    if experiencia.periodo_legado.strip():
+        return _periodo_mm_aaaa(experiencia.periodo_legado, idioma)
+    inicio = _mes_ano(experiencia.data_inicio_mes, experiencia.data_inicio_ano)
+    fim = (
+        TERMO_ATUAL[idioma]
+        if experiencia.atual
+        else _mes_ano(experiencia.data_fim_mes, experiencia.data_fim_ano)
     )
+    return f"{inicio} - {fim}" if inicio and fim else inicio or fim
+
+
+def _local_experiencia(experiencia: ExperienciaPerfil) -> str:
+    return _texto_local(experiencia.local) or experiencia.local_legado.strip()
+
+
+def _experiencia_atual(experiencia: ExperienciaPerfil) -> bool:
+    return experiencia.atual
+
+
+def _recencia_experiencia(
+    experiencia: ExperienciaPerfil,
+) -> tuple[int, tuple[int, int], tuple[int, int]]:
+    inicio = (experiencia.data_inicio_ano or 0, experiencia.data_inicio_mes or 0)
+    if experiencia.atual:
+        return (1, inicio, inicio)
+    fim = (
+        (experiencia.data_fim_ano, experiencia.data_fim_mes or 0)
+        if experiencia.data_fim_ano
+        else inicio
+    )
+    return (0, fim, inicio)
+
+
+def _ordenar_experiencias(experiencias: list[ExperienciaPerfil]) -> list[ExperienciaPerfil]:
+    return sorted(experiencias, key=_recencia_experiencia, reverse=True)
+
+
+def _texto_formacao(formacao: Formacao, idioma: str) -> str:
+    grau, curso = formacao.grau.strip(), formacao.curso.strip()
+    conector = {"pt": "em", "en": "in", "es": "en"}[idioma]
+    titulo = f"{grau} {conector} {curso}" if grau and curso else grau or curso
+    inicio = _mes_ano(formacao.inicio_mes, formacao.inicio_ano)
+    fim = _mes_ano(formacao.fim_mes, formacao.fim_ano)
+    if not fim and formacao.status in ("", "em_andamento"):
+        fim = TERMO_ATUAL[idioma] if inicio else ""
+    periodo = f"{inicio} - {fim}" if inicio and fim else inicio or fim
+    status = STATUS_FORMACAO[idioma].get(formacao.status, "")
+    return " | ".join(p for p in (formacao.instituicao.strip(), titulo, periodo, status) if p)
+
+
+def _texto_certificacao(certificacao: Certificacao) -> str:
+    return ", ".join(p for p in (certificacao.titulo.strip(), certificacao.descricao.strip()) if p)
 
 
 def _texto_perfil(perfil: PerfilMestre) -> str:
     partes = [
-        perfil.nome, str(perfil.contato), perfil.resumo,
+        perfil.nome, _linha_contato(perfil), perfil.resumo,
         " ".join(_texto_experiencia(e) for e in perfil.experiencias),
-        " ".join(perfil.formacao), " ".join(perfil.certificacoes),
+        " ".join(_texto_formacao(f, "pt") for f in perfil.formacao),
+        " ".join(_texto_certificacao(c) for c in perfil.certificacoes),
         " ".join(perfil.idiomas), " ".join(perfil.skills),
     ]
     return "\n".join(p for p in partes if p)
@@ -356,9 +421,14 @@ def _cabecalhos(idioma: str) -> dict[str, str]:
 
 
 def _texto_experiencia(experiencia: ExperienciaPerfil) -> str:
-    partes = [experiencia.cargo, experiencia.empresa, experiencia.periodo, experiencia.local]
+    partes = [
+        experiencia.cargo,
+        experiencia.empresa,
+        _periodo_experiencia(experiencia, "pt"),
+        _local_experiencia(experiencia),
+        experiencia.descricao,
+    ]
     partes.extend(_realizacoes(experiencia))
-    partes.extend(experiencia.tecnologias)
     return "\n".join(parte for parte in partes if parte)
 
 
@@ -440,7 +510,7 @@ def _deterministic_request(req: GenerateCvRequest) -> str:
         req,
     )
     linhas = [f"# {perfil.nome}".strip(), f"**{titulo}**"]
-    contato = _linha_contato(perfil.contato)
+    contato = _linha_contato(perfil)
     if contato:
         linhas += ["", contato]
 
@@ -451,10 +521,10 @@ def _deterministic_request(req: GenerateCvRequest) -> str:
         linhas.append(f"- {categoria}: {', '.join(valores)}")
 
     linhas += ["", f"## {h['experiencia']}"]
-    for indice, experiencia in enumerate(_ordenar_experiencias(perfil.experiencias, idioma)[:3]):
+    for indice, experiencia in enumerate(_ordenar_experiencias(perfil.experiencias)[:3]):
         empresa = experiencia.empresa or "Empresa"
         cargo = experiencia.cargo or "Cargo"
-        periodo = _periodo_mm_aaaa(experiencia.periodo, idioma) or "periodo nao informado"
+        periodo = _periodo_experiencia(experiencia, idioma) or "periodo nao informado"
         linhas += ["", f"**{empresa}** | {cargo} | {periodo}"]
         limite = 3 if indice < 2 else 2
         for realizacao in _selecionar_realizacoes(experiencia, req, limite):
@@ -462,8 +532,10 @@ def _deterministic_request(req: GenerateCvRequest) -> str:
             if limpa:
                 linhas.append(f"- {limpa}")
 
-    linhas += ["", f"## {h['formacao']}", *perfil.formacao]
-    linhas += ["", f"## {h['certificacoes']}", *[f"- {item}" for item in perfil.certificacoes]]
+    formacoes = [texto for f in perfil.formacao if (texto := _texto_formacao(f, idioma))]
+    certificacoes = [texto for c in perfil.certificacoes if (texto := _texto_certificacao(c))]
+    linhas += ["", f"## {h['formacao']}", *formacoes]
+    linhas += ["", f"## {h['certificacoes']}", *[f"- {item}" for item in certificacoes]]
     linhas += ["", f"## {h['idiomas']}"]
     if perfil.idiomas:
         linhas.append(" | ".join(perfil.idiomas))
@@ -541,7 +613,7 @@ def _limpar_markdown(markdown: str, req: GenerateCvRequest) -> str:
     if len(uteis) >= 2 and req.vaga.titulo:
         linhas[uteis[1]] = f"**{_titulo_vaga_seguro(req.vaga.titulo, req)}**"
     linhas = _remover_titulo_duplicado(linhas)
-    contato = _linha_contato(req.perfil_mestre.contato)
+    contato = _linha_contato(req.perfil_mestre)
     uteis = [i for i, linha in enumerate(linhas) if linha.strip()]
     if len(uteis) >= 3 and contato and not linhas[uteis[2]].startswith("#"):
         linhas[uteis[2]] = contato
@@ -567,7 +639,7 @@ def _erros_contrato(markdown: str, req: GenerateCvRequest) -> list[str]:
         erros.append("cabecalho de nome invalido")
     if len(linhas_uteis) < 2 or not re.fullmatch(r"\*\*.+\*\*", linhas_uteis[1]):
         erros.append("titulo profissional ausente")
-    if _linha_contato(req.perfil_mestre.contato) and (
+    if _linha_contato(req.perfil_mestre) and (
         len(linhas_uteis) < 3 or linhas_uteis[2].startswith("#")
     ):
         erros.append("linha de contato ausente")
