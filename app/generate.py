@@ -791,6 +791,7 @@ def _gerar_llm(
         ReescritaLlm,
         chamador="reescrita",
         esforco=ESFORCO_REESCRITA,
+        prompt_version=obter_prompt(PROMPT_REESCRITA).rotulo,
     )
     return _limpar_markdown(res.markdown, req) if res.markdown.strip() else ""
 

@@ -9,6 +9,19 @@ class CamelModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
+class UsoLlm(CamelModel):
+    entrada: int = 0
+    saida: int = 0
+    cache_lida: int = 0
+    cache_escrita: int = 0
+    chamadas: int = 0
+
+
+class ComUso(CamelModel):
+    uso: UsoLlm | None = None
+    modelo: str | None = None
+
+
 class Keyword(CamelModel):
     termo: str
     peso: float
@@ -29,7 +42,7 @@ class KeywordsLlmResponse(CamelModel):
     keywords: list[KeywordLlm]
 
 
-class KeywordsResponse(CamelModel):
+class KeywordsResponse(ComUso):
     keywords: list[Keyword]
     status: Literal["VALIDAS", "PENDENTE"] = "VALIDAS"
     degradacao: str | None = None
@@ -82,7 +95,7 @@ class GenerateCvRequest(CamelModel):
     contexto: list[str] = []
 
 
-class GenerateCvResponse(CamelModel):
+class GenerateCvResponse(ComUso):
     markdown: str
 
 
@@ -104,7 +117,7 @@ class AtsAnalysis(CamelModel):
     breakdown: dict[str, Any] = {}
 
 
-class GeneratePipelineResponse(CamelModel):
+class GeneratePipelineResponse(ComUso):
     markdown: str
     analise_inicial: AtsAnalysis
     analise_final: AtsAnalysis
@@ -208,7 +221,7 @@ class TurnRequest(CamelModel):
     tools: list[ToolSpec] = []
 
 
-class TurnResponse(CamelModel):
+class TurnResponse(ComUso):
     tipo: str
     texto: str | None = None
     tool: str | None = None
@@ -246,7 +259,7 @@ class RedigirMensagemRequest(CamelModel):
     contexto: str = ""
 
 
-class RedigirMensagemResponse(CamelModel):
+class RedigirMensagemResponse(ComUso):
     titulo: str
     texto: str
     destino: str = ""
@@ -269,7 +282,7 @@ class RedigirFormularioRequest(CamelModel):
     campos: list[str] = []
 
 
-class RedigirFormularioResponse(CamelModel):
+class RedigirFormularioResponse(ComUso):
     titulo: str
     respostas: list[RespostaFormulario] = []
     texto: str

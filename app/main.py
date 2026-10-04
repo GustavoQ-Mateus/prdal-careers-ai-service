@@ -1,6 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -24,7 +25,9 @@ from .generate import (
     reduzir_curriculo,
 )
 from .keywords import extract_keywords
-from .llm import LLMUnavailable, PrazoEsgotado, exigir_modelo_no_boot, operacao
+from . import telemetria
+from .degradacao import Degradacao
+from .llm import LLMUnavailable, Operacao, PrazoEsgotado, exigir_modelo_no_boot, operacao
 from .rag import consultar, indexar, substituir
 from .seguranca import (
     HEADER_SERVICO,
@@ -57,6 +60,7 @@ from .schemas import (
     TaxonomiaResponse,
     TurnRequest,
     TurnResponse,
+    UsoLlm,
 )
 from .score import calcular_score
 
@@ -80,10 +84,12 @@ def _aquecer_embeddings() -> None:
 async def lifespan(_app: FastAPI):
     exigir_token_no_boot()
     exigir_modelo_no_boot()
+    telemetria.configurar()
     prompts = carregar_prompts()
     logger.info("prompts carregados: %s", ", ".join(p.rotulo for p in prompts.values()))
     _aquecer_embeddings()
     yield
+    telemetria.encerrar()
 
 
 app = FastAPI(title="ai-service", lifespan=lifespan, **rotas_de_documentacao())
@@ -107,6 +113,27 @@ def _prazo_ms(valor: str | None) -> int | None:
 
 def _operacao_llm(request: Request):
     return operacao(_prazo_ms(request.headers.get(HEADER_PRAZO)), request.headers.get(HEADER_OPERACAO))
+
+
+def _uso(op: Operacao) -> UsoLlm:
+    return UsoLlm(**asdict(op.uso))
+
+
+def _com_uso(resposta, op: Operacao):
+    resposta.uso = _uso(op)
+    resposta.modelo = op.modelo
+    return resposta
+
+
+def _indisponivel(degradacao: Degradacao, exc: Exception, op: Operacao) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": registrar(degradacao, exc),
+            "uso": _uso(op).model_dump(by_alias=True),
+            "modelo": op.modelo,
+        },
+    )
 
 
 class HealthResponse(BaseModel):
@@ -149,40 +176,43 @@ async def hello() -> HelloResponse:
 
 @app.post("/keywords", response_model=KeywordsResponse)
 def keywords(req: KeywordsRequest, request: Request) -> KeywordsResponse:
-    with _operacao_llm(request):
+    with _operacao_llm(request) as op:
         try:
-            return KeywordsResponse(keywords=extract_keywords(req.descricao))
+            return _com_uso(KeywordsResponse(keywords=extract_keywords(req.descricao)), op)
         except LLMUnavailable as exc:
-            return KeywordsResponse(
-                keywords=[],
-                status="PENDENTE",
-                degradacao=registrar(KEYWORDS_INDISPONIVEIS, exc),
+            return _com_uso(
+                KeywordsResponse(
+                    keywords=[],
+                    status="PENDENTE",
+                    degradacao=registrar(KEYWORDS_INDISPONIVEIS, exc),
+                ),
+                op,
             )
 
 
 @app.post("/generate-cv", response_model=GenerateCvResponse)
 def generate(req: GenerateCvRequest, request: Request) -> GenerateCvResponse:
-    with _operacao_llm(request):
+    with _operacao_llm(request) as op:
         try:
-            return GenerateCvResponse(markdown=generate_cv(req))
+            return _com_uso(GenerateCvResponse(markdown=generate_cv(req)), op)
         except KeywordsUnavailable as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/generate-cv-pipeline", response_model=GeneratePipelineResponse)
 def generate_pipeline(req: GenerateCvRequest, request: Request) -> GeneratePipelineResponse:
-    with _operacao_llm(request):
+    with _operacao_llm(request) as op:
         try:
-            return generate_cv_pipeline(req)
+            return _com_uso(generate_cv_pipeline(req), op)
         except KeywordsUnavailable as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/reduzir-curriculo", response_model=GeneratePipelineResponse)
 def reduzir(req: ReduzirCvRequest, request: Request) -> GeneratePipelineResponse:
-    with _operacao_llm(request):
+    with _operacao_llm(request) as op:
         try:
-            return reduzir_curriculo(req, req.markdown_atual)
+            return _com_uso(reduzir_curriculo(req, req.markdown_atual), op)
         except KeywordsUnavailable as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -229,30 +259,30 @@ def context_query(req: QueryRequest) -> QueryResponse:
 
 @app.post("/copiloto/turn", response_model=TurnResponse)
 def copiloto_turn(req: TurnRequest, request: Request) -> TurnResponse:
-    with _operacao_llm(request):
+    with _operacao_llm(request) as op:
         try:
-            return planejar_turno(req)
+            return _com_uso(planejar_turno(req), op)
         except LLMUnavailable as exc:
-            raise HTTPException(status_code=503, detail=registrar(COPILOTO_INDISPONIVEL, exc)) from exc
+            return _indisponivel(COPILOTO_INDISPONIVEL, exc, op)
 
 
 @app.post("/copiloto/redigir-mensagem", response_model=RedigirMensagemResponse)
 def copiloto_redigir_mensagem(
     req: RedigirMensagemRequest, request: Request
 ) -> RedigirMensagemResponse:
-    with _operacao_llm(request):
+    with _operacao_llm(request) as op:
         try:
-            return redigir_mensagem(req)
+            return _com_uso(redigir_mensagem(req), op)
         except LLMUnavailable as exc:
-            raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc
+            return _indisponivel(REDACAO_INDISPONIVEL, exc, op)
 
 
 @app.post("/copiloto/redigir-formulario", response_model=RedigirFormularioResponse)
 def copiloto_redigir_formulario(
     req: RedigirFormularioRequest, request: Request
 ) -> RedigirFormularioResponse:
-    with _operacao_llm(request):
+    with _operacao_llm(request) as op:
         try:
-            return redigir_formulario(req)
+            return _com_uso(redigir_formulario(req), op)
         except LLMUnavailable as exc:
-            raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc
+            return _indisponivel(REDACAO_INDISPONIVEL, exc, op)

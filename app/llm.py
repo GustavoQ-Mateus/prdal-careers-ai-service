@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import threading
@@ -5,12 +6,13 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
 import anthropic
 from pydantic import BaseModel, ValidationError
 
+from . import telemetria
 from .seguranca import em_desenvolvimento
 
 T = TypeVar("T", bound=BaseModel)
@@ -78,9 +80,27 @@ def _piso_s() -> float:
 
 
 @dataclass
+class Uso:
+    entrada: int = 0
+    saida: int = 0
+    cache_lida: int = 0
+    cache_escrita: int = 0
+    chamadas: int = 0
+
+    def somar(self, usage: Any) -> None:
+        self.entrada += getattr(usage, "input_tokens", 0) or 0
+        self.saida += getattr(usage, "output_tokens", 0) or 0
+        self.cache_lida += getattr(usage, "cache_read_input_tokens", 0) or 0
+        self.cache_escrita += getattr(usage, "cache_creation_input_tokens", 0) or 0
+        self.chamadas += 1
+
+
+@dataclass
 class Operacao:
     prazo: float | None
     operacao_id: str | None = None
+    uso: Uso = field(default_factory=Uso)
+    modelo: str | None = None
 
     def restante_s(self) -> float | None:
         if self.prazo is None:
@@ -181,14 +201,60 @@ def _motivo_falha(exc: Exception) -> str:
     return f"falha no cliente do provedor: {type(exc).__name__}"
 
 
-def _chamar(requisicao: dict[str, Any], op: Operacao) -> Any:
+RESULTADOS_POR_PARADA = {"refusal": "recusa", "max_tokens": "limite"}
+
+
+def _atributos(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "anthropic",
+        "gen_ai.request.model": requisicao["model"],
+        "gen_ai.request.max_tokens": requisicao["max_tokens"],
+        "prdal.esforco": requisicao["output_config"]["effort"],
+        "prdal.operacao_id": op.operacao_id,
+        **rotulo,
+    }
+
+
+def _chamar(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any]) -> Any:
     timeout = timeout_da_chamada(op)
+    atributos = _atributos(requisicao, op, rotulo)
+    inicio_ns = time.time_ns()
+    inicio = time.perf_counter()
     try:
-        return cliente().with_options(timeout=timeout).messages.create(**requisicao)
+        resposta = cliente().with_options(timeout=timeout).messages.create(**requisicao)
     except anthropic.AnthropicError as exc:
         motivo = _motivo_falha(exc)
         logger.warning("chamada ao modelo falhou tipo=%s motivo=%s", type(exc).__name__, motivo)
+        atributos.update(
+            {
+                "prdal.resultado": "erro",
+                "error.type": type(exc).__name__,
+                "prdal.latencia_ms": round((time.perf_counter() - inicio) * 1000),
+            }
+        )
+        telemetria.registrar_chamada(atributos, inicio_ns, time.time_ns(), motivo)
         raise LLMUnavailable(motivo) from exc
+    usage = getattr(resposta, "usage", None)
+    op.uso.somar(usage)
+    op.modelo = getattr(resposta, "model", None) or requisicao["model"]
+    entrada = getattr(usage, "input_tokens", 0) or 0
+    cache_lida = getattr(usage, "cache_read_input_tokens", 0) or 0
+    cache_escrita = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    atributos.update(
+        {
+            "gen_ai.response.model": op.modelo,
+            "gen_ai.response.finish_reasons": (str(resposta.stop_reason),),
+            "gen_ai.usage.input_tokens": entrada + cache_lida + cache_escrita,
+            "gen_ai.usage.output_tokens": getattr(usage, "output_tokens", 0) or 0,
+            "gen_ai.usage.cache_read.input_tokens": cache_lida,
+            "gen_ai.usage.cache_creation.input_tokens": cache_escrita,
+            "prdal.resultado": RESULTADOS_POR_PARADA.get(resposta.stop_reason, "ok"),
+            "prdal.latencia_ms": round((time.perf_counter() - inicio) * 1000),
+        }
+    )
+    telemetria.registrar_chamada(atributos, inicio_ns, time.time_ns())
+    return resposta
 
 
 def _texto_da_resposta(resposta: Any) -> str:
@@ -217,6 +283,10 @@ def _erro_legivel(exc: Exception) -> str:
     return str(exc)
 
 
+def versao_do_prompt(chamador: str, system: str) -> str:
+    return f"{chamador}.{hashlib.sha256(system.encode('utf-8')).hexdigest()[:12]}"
+
+
 def complete_model(
     system: str,
     user: str,
@@ -226,6 +296,7 @@ def complete_model(
     esforco: str,
     validar: Callable[[T], None] | None = None,
     max_tokens: int | None = None,
+    prompt_version: str | None = None,
 ) -> T:
     if esforco not in ESFORCOS:
         raise ValueError(f"esforco invalido: {esforco}")
@@ -243,7 +314,12 @@ def complete_model(
         esforco,
         max_tokens or _env_int("AI_MAX_TOKENS", MAX_TOKENS_PADRAO),
     )
-    resposta = _chamar(requisicao, op)
+    rotulo = {
+        "prdal.chamador": chamador,
+        "prdal.prompt_version": prompt_version or versao_do_prompt(chamador, system),
+        "prdal.tentativa": 1,
+    }
+    resposta = _chamar(requisicao, op, rotulo)
     texto = _texto_da_resposta(resposta)
     try:
         return _validar(texto, schema, validar)
@@ -266,7 +342,7 @@ def complete_model(
             ],
         },
     ]
-    resposta = _chamar(requisicao, op)
+    resposta = _chamar(requisicao, op, {**rotulo, "prdal.tentativa": 2})
     texto = _texto_da_resposta(resposta)
     try:
         return _validar(texto, schema, validar)
