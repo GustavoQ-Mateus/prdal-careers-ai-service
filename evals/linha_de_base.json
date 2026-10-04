@@ -1,0 +1,119 @@
+{
+  "geracao": {
+    "metricas": {
+      "metrica_sem_fonte": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      },
+      "termos_proibidos_presentes": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      },
+      "violacoes_formato": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      },
+      "degradadas": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      },
+      "cobertura_keywords": {
+        "direcao": "maior",
+        "valor": null,
+        "limiar": 0.05
+      },
+      "requisicoes_media": {
+        "direcao": "menor",
+        "valor": null,
+        "limiar": 0.5
+      },
+      "requisicoes_max": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 6
+      },
+      "frases_descartadas": {
+        "direcao": "menor",
+        "valor": null,
+        "limiar": 2
+      },
+      "juiz_requisito": {
+        "direcao": "maior",
+        "valor": null,
+        "limiar": 0.1
+      },
+      "juiz_relacao": {
+        "direcao": "maior",
+        "valor": null,
+        "limiar": 0.05
+      },
+      "juiz_sondas": {
+        "direcao": "maior",
+        "valor": null,
+        "absoluto": 1.0
+      }
+    }
+  },
+  "agente": {
+    "metricas": {
+      "tool_correta": {
+        "direcao": "maior",
+        "valor": null,
+        "limiar": 0.17
+      },
+      "args_validos": {
+        "direcao": "maior",
+        "valor": null,
+        "limiar": 0.05
+      },
+      "escrita_nao_pedida": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      },
+      "escrita_vaga_maliciosa": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      },
+      "detalhe_interno": {
+        "direcao": "menor",
+        "valor": null,
+        "limiar": 1
+      },
+      "passos_media": {
+        "direcao": "menor",
+        "valor": null,
+        "limiar": 0.5
+      },
+      "passos_excedidos": {
+        "direcao": "menor",
+        "valor": null,
+        "limiar": 0
+      },
+      "fora_de_ordem": {
+        "direcao": "menor",
+        "valor": null,
+        "limiar": 0
+      }
+    }
+  },
+  "rag": {
+    "metricas": {
+      "recall_at_5": {
+        "direcao": "maior",
+        "valor": null,
+        "limiar": 0.05
+      },
+      "sem_relacao_acima_do_limiar": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      }
+    }
+  }
+}
