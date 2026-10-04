@@ -566,6 +566,25 @@ class PerfilEstruturadoTest(unittest.TestCase):
             linha,
         )
 
+    def test_cabecalho_so_leva_linkedin_github_e_site_nessa_ordem(self):
+        req = self._req(
+            links=[
+                {"tipo": "instagram", "url": "instagram.com/pessoa"},
+                {"tipo": "site", "url": "pessoa.dev"},
+                {"tipo": "facebook", "url": "facebook.com/pessoa"},
+                {"tipo": "github", "url": "github.com/pessoa"},
+                {"tipo": "linkedin", "url": "linkedin.com/in/pessoa"},
+            ]
+        )
+        linha = _linha_contato(req.perfil_mestre)
+        self.assertNotIn("instagram", linha)
+        self.assertNotIn("facebook", linha)
+        self.assertTrue(linha.endswith(
+            " | [linkedin.com/in/pessoa](https://linkedin.com/in/pessoa)"
+            " | [github.com/pessoa](https://github.com/pessoa)"
+            " | [pessoa.dev](https://pessoa.dev)"
+        ))
+
     def test_sem_cidade_estruturada_o_cabecalho_nao_inventa_local(self):
         req = self._req(endereco=None)
         self.assertNotIn("Fortaleza", _linha_contato(req.perfil_mestre))

@@ -223,7 +223,7 @@ def _titulo_vaga_seguro(titulo: str, req: GenerateCvRequest | None = None) -> st
     return limpo or "Desenvolvedor Full-Stack"
 
 
-ORDEM_LINKS = ("site", "linkedin", "github", "facebook", "instagram")
+LINKS_CABECALHO = ("linkedin", "github", "site")
 
 
 def _link(valor: str, url: str | None) -> str:
@@ -248,7 +248,7 @@ def _linha_contato(perfil: PerfilMestre) -> str:
     local = _texto_local(perfil.endereco)
     if local:
         partes.append(local)
-    for tipo in ORDEM_LINKS:
+    for tipo in LINKS_CABECALHO:
         for link in perfil.links:
             url = link.url.strip()
             if link.tipo == tipo and url:
