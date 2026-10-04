@@ -346,12 +346,7 @@ def _tentar(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any], ti
 
 
 def _texto_da_resposta(resposta: Any) -> str:
-    if resposta.stop_reason == "refusal":
-        detalhe = getattr(resposta, "stop_details", None)
-        categoria = getattr(detalhe, "category", None) if detalhe else None
-        raise LLMUnavailable(f"o modelo recusou a resposta categoria={categoria or 'nao informada'}")
-    if resposta.stop_reason == "max_tokens":
-        raise LLMUnavailable("resposta do modelo truncada no limite de tokens")
+    _parada_aceitavel(resposta)
     return "".join(bloco.text for bloco in resposta.content if bloco.type == "text")
 
 
@@ -373,6 +368,76 @@ def _erro_legivel(exc: Exception) -> str:
 
 def versao_do_prompt(chamador: str, system: str) -> str:
     return f"{chamador}.{hashlib.sha256(system.encode('utf-8')).hexdigest()[:12]}"
+
+
+def _parada_aceitavel(resposta: Any) -> None:
+    if resposta.stop_reason == "refusal":
+        detalhe = getattr(resposta, "stop_details", None)
+        categoria = getattr(detalhe, "category", None) if detalhe else None
+        raise LLMUnavailable(f"o modelo recusou a resposta categoria={categoria or 'nao informada'}")
+    if resposta.stop_reason == "max_tokens":
+        raise LLMUnavailable("resposta do modelo truncada no limite de tokens")
+
+
+def _bloco_dict(bloco: Any) -> dict[str, Any]:
+    if isinstance(bloco, dict):
+        return dict(bloco)
+    if hasattr(bloco, "model_dump"):
+        return bloco.model_dump(exclude_none=True)
+    return {chave: valor for chave, valor in vars(bloco).items() if valor is not None}
+
+
+def montar_requisicao_com_tools(
+    modelo: str,
+    system: str,
+    mensagens: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    esforco: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    return {
+        "model": modelo,
+        "max_tokens": max_tokens,
+        "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+        "tools": tools,
+        "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
+        "messages": mensagens,
+        "output_config": {"effort": esforco},
+    }
+
+
+def responder_com_tools(
+    system: str,
+    mensagens: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    *,
+    chamador: str,
+    esforco: str,
+    max_tokens: int | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    if esforco not in ESFORCOS:
+        raise ValueError(f"esforco invalido: {esforco}")
+    modelo = modelo_configurado()
+    if not modelo:
+        raise LLMUnavailable("AI_MODEL ausente")
+    if not _credencial_presente():
+        raise LLMUnavailable("ANTHROPIC_API_KEY ausente")
+    requisicao = montar_requisicao_com_tools(
+        modelo,
+        system,
+        mensagens,
+        tools,
+        esforco,
+        max_tokens or _env_int("AI_MAX_TOKENS", MAX_TOKENS_PADRAO),
+    )
+    rotulo = {
+        "prdal.chamador": chamador,
+        "prdal.prompt_version": versao_do_prompt(chamador, system),
+        "prdal.tentativa": 1,
+    }
+    resposta = _chamar(requisicao, operacao_atual(), rotulo)
+    _parada_aceitavel(resposta)
+    return [_bloco_dict(bloco) for bloco in resposta.content], str(resposta.stop_reason)
 
 
 def complete_model(

@@ -31,6 +31,12 @@ def resposta(
     )
 
 
+def resposta_blocos(blocos, stop_reason="end_turn", entrada=100, saida=20, cache_lida=0, cache_escrita=0):
+    base = resposta("", stop_reason, entrada, saida, cache_lida, cache_escrita)
+    base.content = [SimpleNamespace(**bloco) for bloco in blocos]
+    return base
+
+
 class _Mensagens:
     def __init__(self, dono):
         self._dono = dono

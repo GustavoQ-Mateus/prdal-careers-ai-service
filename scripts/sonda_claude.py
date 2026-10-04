@@ -16,10 +16,8 @@ from app.keywords import extract_keywords
 from app.llm import LLMUnavailable, operacao
 from app.schemas import (
     GenerateCvRequest,
-    MensagemTurno,
     RedigirFormularioRequest,
     RedigirMensagemRequest,
-    ToolSpec,
     TurnRequest,
 )
 
@@ -118,6 +116,26 @@ KEYWORDS = [
 ]
 
 
+def _tool(nome: str, descricao: str) -> dict[str, Any]:
+    return {
+        "name": nome,
+        "description": descricao,
+        "input_schema": {
+            "type": "object",
+            "properties": {"oportunidadeId": {"type": "string", "description": "id da oportunidade"}},
+            "required": ["oportunidadeId"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
+
+
+TOOLS_SONDA = [
+    _tool("buscar_oportunidade", "Le a oportunidade em foco"),
+    _tool("analisar_ats", "Analisa a aderencia do perfil a vaga"),
+]
+
+
 class _Mensagens:
     def __init__(self, gravador: "Gravador", alvo: Any):
         self._gravador = gravador
@@ -145,13 +163,14 @@ class Gravador:
 
 
 def _casos() -> list[tuple[str, Callable[[], Any]]]:
-    turno = TurnRequest(
-        oportunidade_id="op-exemplo",
-        mensagens=[MensagemTurno(papel="user", conteudo="Quais sao os proximos passos para esta vaga?")],
-        tools=[
-            ToolSpec(nome="buscar_oportunidade", efeito="leitura", descricao="Le a oportunidade em foco"),
-            ToolSpec(nome="analisar_ats", efeito="leitura", descricao="Analisa a aderencia do perfil a vaga"),
-        ],
+    turno = TurnRequest.model_validate(
+        {
+            "oportunidadeId": "op-exemplo",
+            "mensagens": [
+                {"role": "user", "content": [{"type": "text", "text": "Quais sao os proximos passos para esta vaga?"}]}
+            ],
+            "tools": TOOLS_SONDA,
+        }
     )
     geracao = GenerateCvRequest.model_validate(
         {

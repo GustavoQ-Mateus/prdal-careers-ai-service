@@ -1,4 +1,3 @@
-import json
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -334,56 +333,33 @@ class QueryResponse(CamelModel):
     chunks: list[Chunk]
 
 
-class MensagemTurno(CamelModel):
-    papel: str
-    conteudo: str
-    tool: str | None = None
+class BlocoNativo(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    type: Literal["text", "tool_use", "tool_result", "thinking", "redacted_thinking"]
 
 
-class ToolSpec(CamelModel):
-    nome: str
-    efeito: str
-    descricao: str = ""
-    parametros: dict[str, Any] = {}
+class MensagemNativa(BaseModel):
+    role: Literal["user", "assistant"]
+    content: list[BlocoNativo]
+
+
+class ToolNativa(BaseModel):
+    name: str
+    description: str = ""
+    input_schema: dict[str, Any]
+    strict: bool | None = None
 
 
 class TurnRequest(CamelModel):
     modo: str = "assistido"
     oportunidade_id: str | None = None
-    mensagens: list[MensagemTurno] = []
-    tools: list[ToolSpec] = []
+    mensagens: list[MensagemNativa] = []
+    tools: list[ToolNativa] = []
 
 
 class TurnResponse(ComUso):
-    tipo: str
-    texto: str | None = None
-    tool: str | None = None
-    args: dict[str, Any] = {}
-
-
-class TurnoLlm(CamelModel):
-    tipo: Literal["texto", "tool_call"]
-    texto: str | None
-    tool: str | None
-    args_json: str | None = Field(
-        description="Argumentos da tool como objeto JSON serializado em texto, por exemplo {\"oportunidadeId\":\"...\"}",
-    )
-
-    @field_validator("args_json")
-    @classmethod
-    def _args_objeto(cls, valor: str | None) -> str | None:
-        if valor is None or not valor.strip():
-            return None
-        try:
-            carregado = json.loads(valor)
-        except json.JSONDecodeError as exc:
-            raise ValueError("argsJson precisa ser um objeto JSON valido") from exc
-        if not isinstance(carregado, dict):
-            raise ValueError("argsJson precisa ser um objeto JSON")
-        return valor
-
-    def args(self) -> dict[str, Any]:
-        return json.loads(self.args_json) if self.args_json else {}
+    conteudo: list[dict[str, Any]] = []
+    parada: str = "end_turn"
 
 
 class RedigirMensagemRequest(CamelModel):

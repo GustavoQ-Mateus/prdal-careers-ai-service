@@ -15,7 +15,7 @@ from app import telemetria
 from app.llm import LLMUnavailable, complete_model, operacao
 from app.main import app
 from app.schemas import KeywordsLlmResponse
-from tests.cliente_falso import ComClienteFalso, resposta
+from tests.cliente_falso import ComClienteFalso, resposta, resposta_blocos
 
 KEYWORDS_OK = {"keywords": [{"termo": "Python", "peso": 1.0, "tipo": "stack"}]}
 SISTEMA = "instrucao fixa secreta"
@@ -139,14 +139,14 @@ class UsoDevolvidoTest(unittest.TestCase):
         self.assertEqual("claude-teste", corpo["modelo"])
 
     def test_indisponibilidade_tambem_devolve_o_uso_gasto(self):
-        vazio = {"tipo": "texto", "texto": "", "tool": None, "argsJson": None}
-        with ComClienteFalso(resposta(vazio, entrada=30), resposta(vazio, entrada=30)):
+        vazio = resposta_blocos([{"type": "text", "text": ""}], entrada=30)
+        with ComClienteFalso(vazio):
             resposta_http = TestClient(app).post(
-                "/copiloto/turn", json={"mensagens": [{"papel": "user", "conteudo": "oi"}]}
+                "/copiloto/turn", json={"mensagens": [{"role": "user", "content": [{"type": "text", "text": "oi"}]}]}
             )
         self.assertEqual(503, resposta_http.status_code)
-        self.assertEqual(60, resposta_http.json()["uso"]["entrada"])
-        self.assertEqual(2, resposta_http.json()["uso"]["chamadas"])
+        self.assertEqual(30, resposta_http.json()["uso"]["entrada"])
+        self.assertEqual(1, resposta_http.json()["uso"]["chamadas"])
 
     def test_geracao_devolve_modelo_e_prompt_version(self):
         corpo_req = {

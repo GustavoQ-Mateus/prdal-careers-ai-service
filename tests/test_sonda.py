@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from app import llm
 from scripts import sonda_claude
-from tests.cliente_falso import resposta
+from tests.cliente_falso import resposta, resposta_blocos
 
 REPARO = {
     "titulo": {"texto": "", "fontes": []},
@@ -18,7 +18,6 @@ REPARO = {
 
 RESPOSTAS_POR_SCHEMA = {
     "KeywordsLlmResponse": {"keywords": [{"termo": "Python", "peso": 1, "tipo": "stack"}]},
-    "TurnoLlm": {"tipo": "texto", "texto": "Vamos revisar a vaga.", "tool": None, "argsJson": None},
     "MensagemLlm": {"titulo": "Contato", "texto": "Ola, tenho interesse na vaga.", "destino": "email"},
     "FormularioLlm": {"titulo": "Respostas", "respostas": [{"campo": "Por que esta vaga?", "texto": "Afinidade."}], "texto": "Afinidade."},
     "ReescritaEstruturada": {
@@ -41,6 +40,12 @@ class _Mensagens:
         self.dono = dono
 
     def create(self, **requisicao):
+        if "tools" in requisicao:
+            self.dono.titulos.append("turno")
+            lida = 1500 if self.dono.titulos.count("turno") > 1 else 0
+            return resposta_blocos(
+                [{"type": "text", "text": "Vamos revisar a vaga."}], cache_lida=lida, cache_escrita=0 if lida else 1500
+            )
         titulo = requisicao["output_config"]["format"]["schema"]["title"]
         self.dono.titulos.append(titulo)
         vezes = self.dono.titulos.count(titulo)

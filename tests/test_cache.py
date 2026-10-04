@@ -6,13 +6,11 @@ from app.generate import generate_cv_pipeline
 from app.keywords import extract_keywords
 from app.schemas import (
     GenerateCvRequest,
-    MensagemTurno,
     RedigirFormularioRequest,
     RedigirMensagemRequest,
-    ToolSpec,
     TurnRequest,
 )
-from tests.cliente_falso import ComClienteFalso, resposta
+from tests.cliente_falso import ComClienteFalso, resposta, resposta_blocos
 from tests.perfis import frase, reescrita, reparo
 
 
@@ -48,10 +46,12 @@ def _geracao(nome, empresa, tecnologia, vaga):
 
 
 def _turno(texto: str, oportunidade: str | None) -> TurnRequest:
-    return TurnRequest(
-        oportunidade_id=oportunidade,
-        mensagens=[MensagemTurno(papel="user", conteudo=texto)],
-        tools=[ToolSpec(nome="ler_perfil", efeito="leitura", descricao="Le o perfil")],
+    return TurnRequest.model_validate(
+        {
+            "oportunidadeId": oportunidade,
+            "mensagens": [{"role": "user", "content": [{"type": "text", "text": texto}]}],
+            "tools": [{"name": "ler_perfil", "description": "Le o perfil", "input_schema": {"type": "object", "properties": {}}}],
+        }
     )
 
 
@@ -81,11 +81,20 @@ class PrefixoEmCacheTest(unittest.TestCase):
         self.assertPrefixoEstavel(cliente.requisicoes, ["Django", "Airflow"])
 
     def test_turno_do_copiloto(self):
-        texto = {"tipo": "texto", "texto": "Certo.", "tool": None, "argsJson": None}
-        with ComClienteFalso(resposta(texto), resposta(texto)) as cliente:
+        texto = [{"type": "text", "text": "Certo."}]
+        with ComClienteFalso(resposta_blocos(texto), resposta_blocos(texto)) as cliente:
             planejar_turno(_turno("quero ver minhas vagas", None))
             planejar_turno(_turno("gere o curriculo da vaga", "op-123"))
-        self.assertPrefixoEstavel(cliente.requisicoes, ["minhas vagas", "op-123"])
+        for requisicao in cliente.requisicoes:
+            self.assertEqual({"type": "ephemeral"}, requisicao["system"][-1]["cache_control"])
+            self.assertEqual({"type": "ephemeral"}, requisicao["messages"][-1]["content"][-1]["cache_control"])
+            self.assertEqual(2, json.dumps(requisicao).count("cache_control"))
+        primeira, segunda = cliente.requisicoes
+        for chave in ("system", "tools", "tool_choice", "output_config"):
+            self.assertEqual(json.dumps(primeira[chave]), json.dumps(segunda[chave]))
+        prefixo = json.dumps([primeira["tools"], primeira["system"]], ensure_ascii=False)
+        for variavel in ("minhas vagas", "op-123"):
+            self.assertNotIn(variavel, prefixo)
 
     def test_redacoes(self):
         mensagem = {"titulo": "t", "texto": "Ola", "destino": "email"}
