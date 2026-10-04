@@ -1,3 +1,5 @@
+import json
+import logging
 import os
 import sys
 import time
@@ -22,6 +24,7 @@ from app.schemas import (
 )
 
 RODADAS = 2
+CHAMADOR_GERACAO = "reescrita"
 
 VAGA = {
     "titulo": "Desenvolvedor Backend Pleno",
@@ -51,6 +54,60 @@ PERFIL = {
     ],
     "skills": ["Python", "FastAPI", "PostgreSQL", "Docker", "Testes automatizados"],
 }
+
+PERFIL_GERACAO = {
+    "nome": "Pessoa Exemplo",
+    "resumo": "Desenvolvedora backend com APIs REST em Python e Java.",
+    "experiencias": [
+        {
+            "id": "atual",
+            "cargo": "Desenvolvedora Backend",
+            "empresa": "Companhia Ficticia",
+            "dataInicioMes": 1,
+            "dataInicioAno": 2023,
+            "atual": True,
+            "descricao": (
+                "- Desenvolvi APIs REST em Python com FastAPI para o modulo de pedidos.\n"
+                "- Participei da migracao do banco para PostgreSQL com o time de dados.\n"
+                "- Reduzi o tempo de resposta das consultas em 30% com indices no PostgreSQL."
+            ),
+        },
+        {
+            "id": "anterior",
+            "cargo": "Estagiaria de Desenvolvimento",
+            "empresa": "Sistemas Ficticios",
+            "dataInicioMes": 2,
+            "dataInicioAno": 2021,
+            "dataFimMes": 12,
+            "dataFimAno": 2022,
+            "descricao": "- Atuei em modulos de faturamento com Java (Spring Boot) sobre MySQL.",
+        },
+    ],
+    "skills": ["Python", "FastAPI", "PostgreSQL", "Java", "Spring Boot", "MySQL"],
+}
+
+VAGA_GERACAO = {
+    "titulo": "Desenvolvedora Backend Java",
+    "empresa": "Empresa Exemplo",
+    "descricao": (
+        "Vaga backend com Java, Spring Boot, APIs REST, PostgreSQL e Kubernetes. "
+        "Desejavel experiencia com mensageria e AWS."
+    ),
+}
+
+KEYWORDS_GERACAO = [
+    {"termo": "Java", "peso": 1.0},
+    {"termo": "Spring Boot", "peso": 0.9},
+    {"termo": "APIs REST", "peso": 0.8},
+    {"termo": "PostgreSQL", "peso": 0.7},
+    {"termo": "Kubernetes", "peso": 0.6},
+    {"termo": "AWS", "peso": 0.4},
+]
+
+CONTEXTO_GERACAO = [
+    {"id": "nota-planos", "tipo": "nota", "factual": False, "titulo": "Planos", "texto": "Quero estudar Kubernetes e AWS no proximo semestre."},
+    {"id": "nota-projeto", "tipo": "nota", "factual": True, "titulo": "Projeto", "texto": "Publiquei a API de pedidos em containers Docker no ambiente de homologacao."},
+]
 
 KEYWORDS = [
     {"termo": "Python", "peso": 1.0},
@@ -97,7 +154,12 @@ def _casos() -> list[tuple[str, Callable[[], Any]]]:
         ],
     )
     geracao = GenerateCvRequest.model_validate(
-        {"perfilMestre": PERFIL, "vaga": {**VAGA, "keywords": KEYWORDS}, "keywords": KEYWORDS, "contexto": []}
+        {
+            "perfilMestre": PERFIL_GERACAO,
+            "vaga": {**VAGA_GERACAO, "keywords": KEYWORDS_GERACAO},
+            "keywords": KEYWORDS_GERACAO,
+            "contexto": CONTEXTO_GERACAO,
+        }
     )
     return [
         ("keywords", lambda: extract_keywords(VAGA["descricao"])),
@@ -114,7 +176,7 @@ def _casos() -> list[tuple[str, Callable[[], Any]]]:
                 )
             ),
         ),
-        ("reescrita", lambda: generate_cv_pipeline(geracao)),
+        (CHAMADOR_GERACAO, lambda: generate_cv_pipeline(geracao)),
     ]
 
 
@@ -131,6 +193,31 @@ def _imprimir(chamador: str, rodada: int, validou: str, chamadas: list[tuple[Any
         print(f"{chamador:<20} rodada={rodada} sem chamada ao modelo validou={validou}")
 
 
+class Captura(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.INFO)
+        self.mensagens: list[str] = []
+
+    def emit(self, registro: logging.LogRecord) -> None:
+        self.mensagens.append(registro.getMessage())
+
+
+def _resumo_geracao(rodada: int, op: Any, captura: Captura, resultado: Any, chamadas: list[tuple[Any, float]]) -> None:
+    rejeitadas = [m for m in captura.mensagens if m.startswith("frase rejeitada")]
+    descartadas = [m for m in captura.mensagens if m.startswith("frase descartada")]
+    reparo = next((m for m in captura.mensagens if m.startswith("reparo localizado")), "reparo localizado nao executado")
+    cache = [getattr(r.usage, "cache_read_input_tokens", 0) or 0 for r, _ in chamadas]
+    print(
+        f"{CHAMADOR_GERACAO:<20} rodada={rodada} resumo requisicoes={op.requisicoes} "
+        f"rejeitadas={len(rejeitadas)} descartadas={len(descartadas)} cache_lida_por_chamada={cache} | {reparo}"
+    )
+    for mensagem in rejeitadas + descartadas:
+        print(f"{CHAMADOR_GERACAO:<20} rodada={rodada}   {mensagem}")
+    if rodada == 1 and resultado is not None and getattr(resultado, "estrutura", None) is not None:
+        print(json.dumps(resultado.estrutura.model_dump(by_alias=True), ensure_ascii=False, indent=2))
+        print(resultado.markdown)
+
+
 def main() -> int:
     if not os.getenv("ANTHROPIC_API_KEY", "").strip():
         print("ANTHROPIC_API_KEY ausente: defina a chave da Anthropic para rodar a sonda ao vivo.", file=sys.stderr)
@@ -141,19 +228,28 @@ def main() -> int:
     gravador = Gravador(llm.cliente())
     llm.definir_cliente(gravador)
     falhas = 0
+    logger_geracao = logging.getLogger("app.generate")
+    logger_geracao.setLevel(logging.INFO)
     for chamador, executar in _casos():
         for rodada in range(1, RODADAS + 1):
             gravador.chamadas.clear()
+            captura = Captura()
+            logger_geracao.addHandler(captura)
+            resultado = None
             try:
-                with operacao(operacao_id=f"sonda:{chamador}:{rodada}"):
+                with operacao(operacao_id=f"sonda:{chamador}:{rodada}") as op:
                     resultado = executar()
                 degradacao = getattr(resultado, "degradacao", None)
                 validou = "nao (" + degradacao + ")" if degradacao else "sim"
             except LLMUnavailable as exc:
                 validou = f"nao ({exc})"
+            finally:
+                logger_geracao.removeHandler(captura)
             if validou != "sim":
                 falhas += 1
             _imprimir(chamador, rodada, validou, list(gravador.chamadas))
+            if chamador == CHAMADOR_GERACAO:
+                _resumo_geracao(rodada, op, captura, resultado, list(gravador.chamadas))
     return 1 if falhas else 0
 
 

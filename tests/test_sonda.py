@@ -8,15 +8,28 @@ from app import llm
 from scripts import sonda_claude
 from tests.cliente_falso import resposta
 
+REPARO = {
+    "titulo": {"texto": "", "fontes": []},
+    "resumo": [],
+    "experiencias": [],
+    "competencias": [],
+    "reparos": [{"chave": "bullet.atual.2", "texto": "Participei da migracao do banco para PostgreSQL com o time de dados.", "fontes": ["atual"]}],
+}
+
 RESPOSTAS_POR_SCHEMA = {
     "KeywordsLlmResponse": {"keywords": [{"termo": "Python", "peso": 1, "tipo": "stack"}]},
     "TurnoLlm": {"tipo": "texto", "texto": "Vamos revisar a vaga.", "tool": None, "argsJson": None},
     "MensagemLlm": {"titulo": "Contato", "texto": "Ola, tenho interesse na vaga.", "destino": "email"},
     "FormularioLlm": {"titulo": "Respostas", "respostas": [{"campo": "Por que esta vaga?", "texto": "Afinidade."}], "texto": "Afinidade."},
     "ReescritaEstruturada": {
-        "titulo": {"texto": "Desenvolvedora Backend", "fontes": ["experiencia-1"]},
-        "resumo": [{"texto": "Desenvolvedora backend com APIs REST em Python.", "fontes": ["resumo"]}],
-        "experiencias": [],
+        "titulo": {"texto": "Desenvolvedora Backend", "fontes": ["atual"]},
+        "resumo": [{"texto": "Desenvolvedora backend com APIs REST em Python e Java.", "fontes": ["resumo"]}],
+        "experiencias": [
+            {"experienciaId": "atual", "bullets": [
+                {"texto": "Desenvolvi APIs REST em Python com FastAPI para o modulo de pedidos.", "fontes": ["atual"]},
+                {"texto": "Operei Kubernetes em producao.", "fontes": ["atual", "nota-planos"]},
+            ]},
+        ],
         "competencias": [],
         "reparos": [],
     },
@@ -30,8 +43,10 @@ class _Mensagens:
     def create(self, **requisicao):
         titulo = requisicao["output_config"]["format"]["schema"]["title"]
         self.dono.titulos.append(titulo)
-        lida = 1500 if self.dono.titulos.count(titulo) > 1 else 0
-        return resposta(RESPOSTAS_POR_SCHEMA[titulo], cache_lida=lida, cache_escrita=0 if lida else 1500)
+        vezes = self.dono.titulos.count(titulo)
+        lida = 1500 if vezes > 1 else 0
+        conteudo = REPARO if titulo == "ReescritaEstruturada" and vezes % 2 == 0 else RESPOSTAS_POR_SCHEMA[titulo]
+        return resposta(conteudo, cache_lida=lida, cache_escrita=0 if lida else 1500)
 
 
 class ClientePorSchema:
@@ -78,6 +93,14 @@ class SondaTest(unittest.TestCase):
             self.assertIn(campo, primeira)
         self.assertIn("cache_escrita=1500", primeira)
         self.assertIn("cache_lida=1500", segunda)
+        resumo = next(linha for linha in linhas if linha.startswith("reescrita") and "rodada=1 resumo" in linha)
+        self.assertIn("requisicoes=2", resumo)
+        self.assertIn("rejeitadas=1", resumo)
+        self.assertIn("descartadas=0", resumo)
+        self.assertIn("cache_lida_por_chamada=[0, 1500]", resumo)
+        self.assertIn("reparadas=1", resumo)
+        self.assertTrue(any("fonte de apoio nao sustenta fato: nota-planos" in linha for linha in linhas))
+        self.assertTrue(any(linha.startswith("# Pessoa Exemplo") for linha in linhas))
 
 
 if __name__ == "__main__":
