@@ -1,19 +1,7 @@
-import json
 import re
-import unicodedata
-import uuid
 from typing import Any
 
-from .contexto import (
-    MARCA_DADO,
-    contador,
-    dado_nao_confiavel,
-    marcar_cache_no_fim,
-    mensagens_para_api,
-    montar_contexto,
-    nomes_por_id,
-    texto_do_resultado,
-)
+from .contexto import MARCA_DADO, contador, mensagens_para_api, montar_contexto
 from .llm import LLMUnavailable, ValidacaoSemantica, complete_model, responder_com_tools
 from .schemas import (
     FormularioLlm,
@@ -47,12 +35,10 @@ SYSTEM_TURNO = (
     "- Nada sai do produto por sua conta. Mensagem ao recrutador e respostas de "
     "formulario sao redigidas pelas tools de redacao e entregues ao candidato, que revisa "
     "e envia. Redacao nao e envio nem candidatura concluida.\n"
-    "- Curriculo para uma vaga segue a ordem: analise ATS do perfil (Etapa 1), "
-    "confirmacao do candidato, geracao (Etapa 2), acompanhamento da geracao ate CONCLUIDA "
-    "e leitura do curriculo final com score e breakdown (Etapa 3). Acao externa so depois "
-    "da Etapa 3. Com a geracao em andamento, diga isso e pare.\n"
-    "- Se o candidato disser que atualizou o perfil e quer tentar de novo, leia o perfil "
-    "e recomece pela analise; nao peca Markdown nem edite o curriculo nesse caso.\n"
+    "- A ordem das etapas do pipeline ATS e do produto, nao sua. O estado atual da "
+    "oportunidade em foco e o proximo passo valido chegam em <contexto_do_produto>; uma "
+    "tool fora de ordem volta com erro dizendo o passo valido. Escolha o que o candidato "
+    "quer e redija; nao invente etapa nem pule a confirmacao.\n"
     "- Curriculos preservam fatos verdadeiros, experiencias densas, autoria de time quando "
     "aplicavel, bullets com verbo de acao, keywords honestas e pagina unica quando possivel.\n"
     "- Quando uma tool falhar, explique em linguagem de produto e proponha o proximo passo; "
@@ -81,74 +67,6 @@ _DETALHE_INTERNO = re.compile(
 )
 
 
-def _normalizar_intencao(texto: str) -> str:
-    return "".join(
-        caractere
-        for caractere in unicodedata.normalize("NFD", texto.lower())
-        if not unicodedata.combining(caractere)
-    )
-
-
-def _mencoes_proximas(texto: str, grupos: tuple[tuple[str, ...], tuple[str, ...]]) -> bool:
-    esquerda, direita = grupos
-    for a in esquerda:
-        for b in direita:
-            for primeiro in re.finditer(rf"\b{a}\w*\b", texto):
-                if re.search(rf"\b{b}\w*\b", texto[max(0, primeiro.start() - 48) : primeiro.end() + 48]):
-                    return True
-    return False
-
-
-def _novo_id() -> str:
-    return f"toolu_prdal_{uuid.uuid4().hex}"
-
-
-def _chamada(tool: str, args: dict[str, Any] | None = None) -> TurnResponse:
-    bloco = {"type": "tool_use", "id": _novo_id(), "name": tool, "input": args or {}}
-    return TurnResponse(conteudo=[bloco], parada="tool_use")
-
-
-def _textos_do_candidato(req: TurnRequest) -> list[str]:
-    return [
-        bloco.model_extra.get("text", "")
-        for mensagem in req.todas_as_mensagens()
-        if mensagem.role == "user"
-        for bloco in mensagem.content
-        if bloco.type == "text"
-    ]
-
-
-def _ultimo_resultado(req: TurnRequest) -> tuple[str, str] | None:
-    mensagens = req.todas_as_mensagens()
-    if not mensagens or mensagens[-1].role != "user":
-        return None
-    resultados = [bloco for bloco in mensagens[-1].content if bloco.type == "tool_result"]
-    if not resultados:
-        return None
-    ultimo = resultados[-1].model_extra
-    nome = nomes_por_id(mensagens).get(str(ultimo.get("tool_use_id")))
-    return (nome or "", texto_do_resultado(ultimo.get("content")))
-
-
-def _regerar_por_perfil_atualizado(req: TurnRequest) -> TurnResponse | None:
-    if not req.oportunidade_id or not req.todas_as_mensagens():
-        return None
-    ultimas_mensagens = [_normalizar_intencao(texto) for texto in _textos_do_candidato(req)][-2:]
-    contexto = " ".join(ultimas_mensagens)
-    atualizou = bool(re.search(r"\b(atualiz|adicionei|inclui|coloquei)\w*\b", contexto))
-    perfil = _mencoes_proximas(
-        contexto,
-        (("atualiz", "adicionei", "inclui", "coloquei"), ("perfil", "competenc")),
-    )
-    tentar = bool(re.search(r"\b(tente|novamente|nova versao|reger|tentar)\w*\b", contexto))
-    if not (atualizou and perfil and tentar):
-        return None
-    ultimo = _ultimo_resultado(req)
-    if ultimo and ultimo[0] == "ler_perfil":
-        return _chamada("analisar_ats", {"oportunidadeId": req.oportunidade_id})
-    return _chamada("ler_perfil")
-
-
 def _texto_para_candidato(texto: str, req: TurnRequest | None = None) -> str:
     protegido = _DETALHE_INTERNO.sub("esta acao", texto)
     if req:
@@ -158,67 +76,11 @@ def _texto_para_candidato(texto: str, req: TurnRequest | None = None) -> str:
     return protegido
 
 
-def _narracao_ats_concluida(req: TurnRequest) -> TurnResponse | None:
-    ultimo = _ultimo_resultado(req)
-    if not ultimo or ultimo[0] != "buscar_curriculo":
-        return None
-    try:
-        curriculo = json.loads(ultimo[1])
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(curriculo, dict):
-        return None
-    inicial = curriculo.get("analiseInicial")
-    final = curriculo.get("analiseFinal")
-    if not isinstance(inicial, dict) or not isinstance(final, dict):
-        return None
-    score_inicial = inicial.get("score")
-    score_final = final.get("score")
-    if not isinstance(score_inicial, (int, float)) or not isinstance(score_final, (int, float)):
-        return None
-
-    def lista(campo: str) -> str:
-        valores = inicial.get(campo)
-        if not isinstance(valores, list):
-            return "Nenhuma"
-        itens = [str(valor).strip() for valor in valores if str(valor).strip()]
-        return ", ".join(itens) if itens else "Nenhuma"
-
-    pontos = lista("pontosEliminatorios")
-    linhas_iniciais = [
-        "Etapa 1: Aderência do perfil-mestre",
-        f"Score: {score_inicial}",
-        f"Keywords encontradas: {lista('keywordsEncontradas')}",
-        f"Keywords críticas ausentes: {lista('keywordsCriticasAusentes')}",
-    ]
-    if pontos != "Nenhuma":
-        linhas_iniciais.append(f"Pontos de atenção: {pontos}")
-    linhas_iniciais.append(f"Veredicto: {str(inicial.get('veredicto') or 'Sem veredicto informado.')}")
-
-    linhas_finais = [
-        "Etapa 3: Aderência do currículo gerado",
-        f"Score: {score_final}. Para referência, a aderência do perfil-mestre foi {score_inicial}.",
-    ]
-    ausentes_finais = final.get("keywordsCriticasAusentes")
-    if isinstance(ausentes_finais, list) and any(str(item).strip() for item in ausentes_finais):
-        linhas_finais.append(
-            "Keywords ainda ausentes: " + ", ".join(str(item).strip() for item in ausentes_finais if str(item).strip())
-        )
-    texto = "\n".join(linhas_iniciais) + "\n\n[[NARRACAO_ATS_ETAPA_3]]\n\n" + "\n".join(linhas_finais)
-    return TurnResponse(conteudo=[{"type": "text", "text": texto}], parada="end_turn")
-
-
 def tools_para_api(req: TurnRequest) -> list[dict[str, Any]]:
     return [tool.model_dump(exclude_none=True) for tool in req.tools]
 
 
 def planejar_turno(req: TurnRequest) -> TurnResponse:
-    regeracao = _regerar_por_perfil_atualizado(req)
-    if regeracao:
-        return regeracao
-    narracao = _narracao_ats_concluida(req)
-    if narracao:
-        return narracao
     system = [{"type": "text", "text": SYSTEM_TURNO, "cache_control": {"type": "ephemeral"}}]
     payload, resumo = montar_contexto(req, system, tools_para_api(req))
     blocos, parada, entrada = responder_com_tools(

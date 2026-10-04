@@ -5,8 +5,6 @@ from fastapi.testclient import TestClient
 
 from app.copiloto import (
     SYSTEM_TURNO,
-    _narracao_ats_concluida,
-    _regerar_por_perfil_atualizado,
     _texto_para_candidato,
     mensagens_para_api,
     planejar_turno,
@@ -148,41 +146,6 @@ class ContratoNativoTest(unittest.TestCase):
         self.assertEqual(2000, corpo["uso"]["cacheLida"])
 
 
-class PerfilAtualizadoCopilotoTest(unittest.TestCase):
-    def test_le_perfil_antes_de_regerar(self):
-        res = _regerar_por_perfil_atualizado(
-            turno(usuario("Atualizei minhas competencias, tente novamente"), oportunidade="vaga-1")
-        )
-        self.assertIsNotNone(res)
-        self.assertEqual("ler_perfil", res.conteudo[0]["name"])
-        self.assertTrue(res.conteudo[0]["id"].startswith("toolu_"))
-
-    def test_regera_apos_leitura_do_perfil_atualizado(self):
-        res = _regerar_por_perfil_atualizado(
-            turno(
-                usuario("Atualizei minhas competencias, tente novamente"),
-                usuario("Ja coloquei no perfil"),
-                chamada("toolu_1", "ler_perfil"),
-                resultado("toolu_1", "{}"),
-                oportunidade="vaga-1",
-            )
-        )
-        self.assertIsNotNone(res)
-        self.assertEqual("analisar_ats", res.conteudo[0]["name"])
-        self.assertEqual({"oportunidadeId": "vaga-1"}, res.conteudo[0]["input"])
-
-    def test_nao_regera_sem_pedido_de_nova_tentativa(self):
-        res = _regerar_por_perfil_atualizado(
-            turno(
-                usuario("Atualizei minhas competencias no perfil"),
-                chamada("toolu_1", "ler_perfil"),
-                resultado("toolu_1", "{}"),
-                oportunidade="vaga-1",
-            )
-        )
-        self.assertIsNone(res)
-
-
 class TextoParaCandidatoTest(unittest.TestCase):
     def test_remove_identificadores_internos_do_texto(self):
         texto = _texto_para_candidato("Vou chamar editar_curriculo via PUT /curriculos/1 com JSON.")
@@ -205,36 +168,54 @@ class TextoParaCandidatoTest(unittest.TestCase):
         self.assertIn("agora", texto)
 
 
-class NarracaoAtsCopilotoTest(unittest.TestCase):
-    def test_narra_as_etapas_1_e_3_com_dados_do_curriculo_concluido(self):
-        analise_inicial = {
-            "score": 48,
-            "keywordsEncontradas": ["TypeScript"],
-            "keywordsCriticasAusentes": ["Docker"],
-            "pontosEliminatorios": ["secao obrigatoria ausente"],
-            "veredicto": "Requer ajuste antes da candidatura.",
-        }
-        res = _narracao_ats_concluida(
-            turno(
-                usuario("gere"),
-                chamada("toolu_1", "buscar_curriculo"),
-                resultado(
-                    "toolu_1",
-                    json.dumps({"analiseInicial": analise_inicial, "analiseFinal": {**analise_inicial, "score": 76}}),
-                ),
-            )
+class PipelineAtsNoContextoTest(unittest.TestCase):
+    def test_system_nao_descreve_o_fluxo_em_prosa(self):
+        for trecho in ("Etapa 1), ", "acompanhamento da geracao", "atualizou o perfil", "CONCLUIDA"):
+            self.assertNotIn(trecho, SYSTEM_TURNO)
+        self.assertIn("<contexto_do_produto>", SYSTEM_TURNO)
+
+    def test_estado_do_pipeline_entra_no_contexto_do_produto(self):
+        req = TurnRequest.model_validate(
+            {
+                "oportunidadeId": "vaga-1",
+                "pipelineAts": {
+                    "oportunidadeId": "vaga-1",
+                    "estado": "DESATUALIZADA",
+                    "descricao": "DESATUALIZADA (o perfil mudou); proximo passo valido: analisar_ats",
+                },
+                "mensagens": [usuario("Mudei meu perfil, gera de novo")],
+                "tools": [TOOL_PERFIL],
+            }
         )
-        self.assertIsNotNone(res)
-        texto = res.conteudo[0]["text"]
-        self.assertIn("Keywords encontradas: TypeScript", texto)
-        self.assertIn("Pontos de atenção: secao obrigatoria ausente", texto)
-        self.assertIn("[[NARRACAO_ATS_ETAPA_3]]", texto)
-        self.assertIn("Etapa 1: Aderência do perfil-mestre", texto)
-        self.assertIn("Etapa 3: Aderência do currículo gerado", texto)
-        self.assertIn("Score: 76", texto)
-        self.assertIn("Keywords ainda ausentes: Docker", texto)
-        for proibida in ("aumentou", "melhorou", "reduziu", chr(0x2014)):
-            self.assertNotIn(proibida, texto)
+        with ComClienteFalso(resposta_blocos([{"type": "text", "text": "Vou refazer a analise."}])) as cliente:
+            res = planejar_turno(req)
+        contexto = cliente.requisicoes[0]["messages"][0]["content"][0]["text"]
+        self.assertIn("<contexto_do_produto>", contexto)
+        self.assertIn("Pipeline ATS da oportunidade em foco: DESATUALIZADA", contexto)
+        self.assertIn("analisar_ats", contexto)
+        self.assertEqual(1, len(cliente.requisicoes))
+        self.assertEqual("Vou refazer a analise.", res.conteudo[0]["text"])
+
+    def test_estado_de_outra_oportunidade_nao_entra(self):
+        req = TurnRequest.model_validate(
+            {
+                "oportunidadeId": "vaga-2",
+                "pipelineAts": {"oportunidadeId": "vaga-1", "estado": "CONCLUIDA", "descricao": "CONCLUIDA"},
+                "mensagens": [usuario("oi")],
+            }
+        )
+        with ComClienteFalso(resposta_blocos([{"type": "text", "text": "Oi."}])) as cliente:
+            planejar_turno(req)
+        self.assertNotIn("Pipeline ATS", cliente.requisicoes[0]["messages"][0]["content"][0]["text"])
+
+    def test_pedido_de_regeracao_vai_ao_modelo_sem_atalho(self):
+        bloco = {"type": "tool_use", "id": "toolu_1", "name": "analisar_ats", "input": {"oportunidadeId": "vaga-1"}}
+        with ComClienteFalso(resposta_blocos([bloco], stop_reason="tool_use")) as cliente:
+            res = planejar_turno(
+                turno(usuario("Atualizei minhas competencias no perfil, tente novamente"), oportunidade="vaga-1")
+            )
+        self.assertEqual(1, len(cliente.requisicoes))
+        self.assertEqual("toolu_1", res.conteudo[0]["id"])
 
 
 class RedacaoVaziaCopilotoTest(unittest.TestCase):

@@ -360,9 +360,16 @@ class ResumoConversa(CamelModel):
     ate: int
 
 
+class PipelineAtsContexto(CamelModel):
+    oportunidade_id: str
+    estado: str
+    descricao: str
+
+
 class TurnRequest(CamelModel):
     modo: str = "assistido"
     oportunidade_id: str | None = None
+    pipeline_ats: PipelineAtsContexto | None = None
     mensagens: list[MensagemNativa] = []
     trocas: list[Troca] = []
     resumo: ResumoConversa | None = None

@@ -219,12 +219,15 @@ def compactar(mensagens: list[MensagemNativa], nomes: dict[str, str], preservar_
 
 
 def _prefixo(req: TurnRequest, resumo: str) -> MensagemNativa:
+    pipeline = ""
+    if req.pipeline_ats and req.pipeline_ats.oportunidade_id == req.oportunidade_id:
+        pipeline = f" Pipeline ATS da oportunidade em foco: {req.pipeline_ats.descricao}."
     blocos = [
         {
             "type": "text",
             "text": (
                 f"<contexto_do_produto>Modo: {req.modo}. Oportunidade em foco: "
-                f"{req.oportunidade_id or 'nenhuma'}.</contexto_do_produto>"
+                f"{req.oportunidade_id or 'nenhuma'}.{pipeline}</contexto_do_produto>"
             ),
         }
     ]
