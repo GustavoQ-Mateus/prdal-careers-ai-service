@@ -1,6 +1,5 @@
 import json
 import unittest
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -19,13 +18,11 @@ from app.main import app
 from app.schemas import (
     MensagemTurno,
     RedigirFormularioRequest,
-    RedigirFormularioResponse,
     RedigirMensagemRequest,
-    RedigirMensagemResponse,
     ToolSpec,
     TurnRequest,
-    TurnResponse,
 )
+from tests.cliente_falso import ComClienteFalso, resposta
 
 
 class CatalogoCopilotoTest(unittest.TestCase):
@@ -162,39 +159,69 @@ class NarracaoAtsCopilotoTest(unittest.TestCase):
 
 
 class RespostaVaziaCopilotoTest(unittest.TestCase):
-    @patch("app.copiloto.complete_model", return_value=RedigirMensagemResponse(titulo="t", texto="  "))
-    def test_mensagem_vazia_vira_indisponibilidade(self, _complete):
-        with self.assertRaises(LLMUnavailable):
-            redigir_mensagem(RedigirMensagemRequest())
+    TURNO = TurnRequest(
+        mensagens=[MensagemTurno(papel="user", conteudo="oi")],
+        tools=[ToolSpec(nome="ler_perfil", efeito="leitura")],
+    )
 
-    @patch("app.copiloto.complete_model", return_value=RedigirFormularioResponse(titulo="t", respostas=[], texto=""))
-    def test_formulario_sem_respostas_vira_indisponibilidade(self, _complete):
-        with self.assertRaises(LLMUnavailable):
-            redigir_formulario(RedigirFormularioRequest(campos=["Por que esta vaga?"]))
+    def test_mensagem_vazia_tenta_um_reparo_e_vira_indisponibilidade(self):
+        vazia = {"titulo": "t", "texto": "  ", "destino": ""}
+        with ComClienteFalso(resposta(vazia), resposta(vazia)) as cliente:
+            with self.assertRaises(LLMUnavailable):
+                redigir_mensagem(RedigirMensagemRequest())
+        self.assertEqual(2, len(cliente.requisicoes))
+        self.assertIn("vazia", cliente.requisicoes[1]["messages"][2]["content"][0]["text"])
 
-    @patch("app.copiloto.complete_model", return_value=TurnResponse(tipo="outro", texto="oi"))
-    def test_turno_com_tipo_invalido_vira_indisponibilidade(self, _complete):
-        with self.assertRaises(LLMUnavailable):
-            planejar_turno(TurnRequest(mensagens=[MensagemTurno(papel="user", conteudo="oi")]))
+    def test_formulario_sem_respostas_vira_indisponibilidade(self):
+        vazio = {"titulo": "t", "respostas": [], "texto": ""}
+        with ComClienteFalso(resposta(vazio), resposta(vazio)):
+            with self.assertRaises(LLMUnavailable):
+                redigir_formulario(RedigirFormularioRequest(campos=["Por que esta vaga?"]))
 
-    @patch("app.copiloto.complete_model", return_value=TurnResponse(tipo="texto", texto=""))
-    def test_turno_vazio_vira_indisponibilidade(self, _complete):
-        with self.assertRaises(LLMUnavailable):
-            planejar_turno(TurnRequest(mensagens=[MensagemTurno(papel="user", conteudo="oi")]))
+    def test_turno_com_tipo_invalido_vira_indisponibilidade(self):
+        outro = {"tipo": "outro", "texto": "oi", "tool": None, "argsJson": None}
+        with ComClienteFalso(resposta(outro), resposta(outro)) as cliente:
+            with self.assertRaises(LLMUnavailable):
+                planejar_turno(self.TURNO)
+        self.assertEqual(2, len(cliente.requisicoes))
 
-    @patch("app.copiloto.complete_model", return_value=RedigirMensagemResponse(titulo="t", texto=""))
-    def test_endpoint_de_redacao_responde_503_com_frase_de_produto(self, _complete):
-        resposta = TestClient(app).post("/copiloto/redigir-mensagem", json={})
-        self.assertEqual(resposta.status_code, 503)
-        self.assertIn("indisponível", resposta.json()["detail"])
-        self.assertNotIn("vazia", resposta.json()["detail"])
+    def test_turno_vazio_vira_indisponibilidade(self):
+        vazio = {"tipo": "texto", "texto": "", "tool": None, "argsJson": None}
+        with ComClienteFalso(resposta(vazio), resposta(vazio)):
+            with self.assertRaises(LLMUnavailable):
+                planejar_turno(self.TURNO)
 
-    @patch("app.copiloto.complete_model", return_value=TurnResponse(tipo="texto", texto=""))
-    def test_endpoint_de_turno_responde_503(self, _complete):
-        resposta = TestClient(app).post(
-            "/copiloto/turn", json={"mensagens": [{"papel": "user", "conteudo": "oi"}]}
-        )
-        self.assertEqual(resposta.status_code, 503)
+    def test_tool_fora_do_catalogo_e_reparada(self):
+        fora = {"tipo": "tool_call", "texto": None, "tool": "apagar_tudo", "argsJson": "{}"}
+        valida = {"tipo": "tool_call", "texto": None, "tool": "ler_perfil", "argsJson": "{\"secao\": \"skills\"}"}
+        with ComClienteFalso(resposta(fora), resposta(valida)) as cliente:
+            turno = planejar_turno(self.TURNO)
+        self.assertEqual("ler_perfil", turno.tool)
+        self.assertEqual({"secao": "skills"}, turno.args)
+        self.assertIn("fora do catalogo", cliente.requisicoes[1]["messages"][2]["content"][0]["text"])
+
+    def test_args_que_nao_sao_objeto_sao_reparados(self):
+        lista = {"tipo": "tool_call", "texto": None, "tool": "ler_perfil", "argsJson": "[1, 2]"}
+        valida = {"tipo": "tool_call", "texto": None, "tool": "ler_perfil", "argsJson": "{}"}
+        with ComClienteFalso(resposta(lista), resposta(valida)):
+            turno = planejar_turno(self.TURNO)
+        self.assertEqual({}, turno.args)
+
+    def test_endpoint_de_redacao_responde_503_com_frase_de_produto(self):
+        vazia = {"titulo": "t", "texto": "", "destino": ""}
+        with ComClienteFalso(resposta(vazia), resposta(vazia)):
+            resposta_http = TestClient(app).post("/copiloto/redigir-mensagem", json={})
+        self.assertEqual(resposta_http.status_code, 503)
+        self.assertIn("indisponível", resposta_http.json()["detail"])
+        self.assertNotIn("vazia", resposta_http.json()["detail"])
+
+    def test_endpoint_de_turno_responde_503(self):
+        vazio = {"tipo": "texto", "texto": "", "tool": None, "argsJson": None}
+        with ComClienteFalso(resposta(vazio), resposta(vazio)):
+            resposta_http = TestClient(app).post(
+                "/copiloto/turn", json={"mensagens": [{"papel": "user", "conteudo": "oi"}]}
+            )
+        self.assertEqual(resposta_http.status_code, 503)
 
 
 if __name__ == "__main__":

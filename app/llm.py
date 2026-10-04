@@ -1,23 +1,25 @@
-import json
 import logging
 import os
-import re
-from typing import TypeVar
+import threading
+import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import Any, TypeVar
 
-from openai import OpenAI
-from pydantic import BaseModel
+import anthropic
+from pydantic import BaseModel, ValidationError
+
+from .seguranca import em_desenvolvimento
 
 T = TypeVar("T", bound=BaseModel)
 
-DEFAULT_TIMEOUT_SECONDS = 90.0
-DEFAULT_MODEL = "openai/gpt-oss-20b"
-DEFAULT_STRICT_MODELS = frozenset(
-    {
-        "openai/gpt-oss-20b",
-        "openai/gpt-oss-120b",
-        "qwen/qwen3.8-27b",
-    }
-)
+ESFORCOS = ("low", "medium", "high", "xhigh", "max")
+MAX_TOKENS_PADRAO = 16000
+TIMEOUT_TETO_PADRAO_S = 120.0
+TIMEOUT_PISO_PADRAO_S = 5.0
+MAX_RETRIES_PADRAO = 2
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +28,16 @@ class LLMUnavailable(Exception):
     pass
 
 
-PROVEDORES_SUPORTADOS = frozenset({"groq", "openrouter", "anthropic"})
+class PrazoEsgotado(Exception):
+    pass
 
-ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
+
+class ValidacaoSemantica(ValueError):
+    pass
 
 
-def _provider() -> str:
-    return os.getenv("AI_PROVIDER", "groq").lower()
+class ModeloAusente(RuntimeError):
+    pass
 
 
 def _env_float(nome: str, fallback: float) -> float:
@@ -43,197 +48,227 @@ def _env_float(nome: str, fallback: float) -> float:
     return valor if valor > 0 else fallback
 
 
-_FENCE_JSON_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.DOTALL)
+def _env_int(nome: str, fallback: int) -> int:
+    try:
+        valor = int(os.getenv(nome, str(fallback)))
+    except ValueError:
+        return fallback
+    return valor if valor >= 0 else fallback
 
 
-def _sem_fence_markdown(content: str) -> str:
-    match = _FENCE_JSON_RE.match(content.strip())
-    return match.group(1).strip() if match else content
+def modelo_configurado() -> str | None:
+    return os.getenv("AI_MODEL", "").strip() or None
 
 
-def _client_and_model() -> tuple[OpenAI, str]:
-    if _provider() == "openrouter":
-        return OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY", ""),
-            timeout=_env_float("AI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS),
-        ), os.getenv("AI_MODEL", DEFAULT_MODEL)
-    return OpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key=os.getenv("GROQ_API_KEY", ""),
-        timeout=_env_float("AI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS),
-    ), os.getenv("AI_MODEL", DEFAULT_MODEL)
-
-
-def _supports_reasoning_effort(model: str) -> bool:
-    normalized = model.lower()
-    return any(
-        marker in normalized
-        for marker in ("gpt-oss", "qwen", "deepseek", "reasoning")
+def exigir_modelo_no_boot() -> None:
+    if em_desenvolvimento() or modelo_configurado():
+        return
+    raise ModeloAusente(
+        "AI_MODEL ausente; defina o modelo do Claude antes de subir o ai-service "
+        "fora de PRDAL_AMBIENTE=desenvolvimento"
     )
 
 
-def _strict_models() -> set[str]:
-    configurados = os.getenv("AI_STRICT_MODELS", "")
-    if configurados.strip():
-        return {item.strip().lower() for item in configurados.split(",") if item.strip()}
-    return set(DEFAULT_STRICT_MODELS)
+def _teto_s() -> float:
+    return _env_float("AI_TIMEOUT_TETO_S", TIMEOUT_TETO_PADRAO_S)
 
 
-def _strict_schema(valor: object, obrigatorio: bool = True) -> object:
-    if isinstance(valor, list):
-        return [_strict_schema(item, obrigatorio) for item in valor]
-    if not isinstance(valor, dict):
-        return valor
-
-    resultado = {
-        chave: _strict_schema(item, obrigatorio)
-        for chave, item in valor.items()
-        if chave not in {"default", "title", "$schema"}
-    }
-    propriedades = resultado.get("properties")
-    if isinstance(propriedades, dict):
-        required_atual = set(resultado.get("required", []))
-        for nome, propriedade in list(propriedades.items()):
-            if nome not in required_atual and isinstance(propriedade, dict):
-                if "anyOf" not in propriedade and "oneOf" not in propriedade:
-                    propriedades[nome] = {"anyOf": [propriedade, {"type": "null"}]}
-        resultado["required"] = list(propriedades)
-        resultado["additionalProperties"] = False
-    return resultado
+def _piso_s() -> float:
+    return min(_env_float("AI_TIMEOUT_PISO_S", TIMEOUT_PISO_PADRAO_S), _teto_s())
 
 
-def _tem_mapa_dinamico(valor: object) -> bool:
-    if isinstance(valor, list):
-        return any(_tem_mapa_dinamico(item) for item in valor)
-    if not isinstance(valor, dict):
-        return False
-    if valor.get("type") == "object":
-        if valor.get("additionalProperties") is True:
-            return True
-        if "properties" not in valor and "additionalProperties" not in valor:
-            return True
-    return any(_tem_mapa_dinamico(item) for item in valor.values())
+@dataclass
+class Operacao:
+    prazo: float | None
+    operacao_id: str | None = None
+
+    def restante_s(self) -> float | None:
+        if self.prazo is None:
+            return None
+        return self.prazo - time.monotonic()
 
 
-def _response_format(model: str, schema: type[T]) -> dict[str, object]:
-    modo = os.getenv("AI_JSON_SCHEMA_MODE", "auto").lower()
-    usar_strict = modo == "strict" or (modo == "auto" and model.lower() in _strict_models())
-    schema_original = schema.model_json_schema()
-    if not usar_strict or modo == "object" or _tem_mapa_dinamico(schema_original):
-        return {"type": "json_object"}
-    nome = re.sub(r"[^a-zA-Z0-9_-]+", "_", schema.__name__) or "response"
+_operacao: ContextVar[Operacao | None] = ContextVar("operacao_llm", default=None)
+
+
+@contextmanager
+def operacao(prazo_ms: int | None = None, operacao_id: str | None = None) -> Iterator[Operacao]:
+    if prazo_ms is not None and prazo_ms <= 0:
+        raise PrazoEsgotado("prazo da operacao ja esgotado")
+    atual = Operacao(
+        prazo=time.monotonic() + prazo_ms / 1000 if prazo_ms is not None else None,
+        operacao_id=operacao_id,
+    )
+    token = _operacao.set(atual)
+    try:
+        yield atual
+    finally:
+        _operacao.reset(token)
+
+
+def operacao_atual() -> Operacao:
+    return _operacao.get() or Operacao(prazo=None)
+
+
+def timeout_da_chamada(op: Operacao) -> float:
+    restante = op.restante_s()
+    if restante is None:
+        return _teto_s()
+    if restante <= 0:
+        raise PrazoEsgotado("prazo da operacao esgotado antes da chamada ao modelo")
+    return max(_piso_s(), min(restante, _teto_s()))
+
+
+_cliente: Any = None
+_trava_cliente = threading.Lock()
+
+
+def _credencial_presente() -> bool:
+    return bool(os.getenv("ANTHROPIC_API_KEY", "").strip() or os.getenv("ANTHROPIC_AUTH_TOKEN", "").strip())
+
+
+def cliente() -> Any:
+    global _cliente
+    if _cliente is None:
+        with _trava_cliente:
+            if _cliente is None:
+                _cliente = anthropic.Anthropic(
+                    max_retries=_env_int("AI_MAX_RETRIES", MAX_RETRIES_PADRAO),
+                    timeout=_teto_s(),
+                )
+    return _cliente
+
+
+def definir_cliente(novo: Any) -> None:
+    global _cliente
+    with _trava_cliente:
+        _cliente = novo
+
+
+def montar_requisicao(
+    modelo: str,
+    system: str,
+    user: str,
+    schema: type[BaseModel],
+    esforco: str,
+    max_tokens: int,
+) -> dict[str, Any]:
     return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": nome,
-            "strict": True,
-            "schema": _strict_schema(schema_original),
+        "model": modelo,
+        "max_tokens": max_tokens,
+        "system": [{"type": "text", "text": system}],
+        "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
+        "output_config": {
+            "effort": esforco,
+            "format": {"type": "json_schema", "schema": anthropic.transform_schema(schema)},
         },
     }
 
 
-def _completar_anthropic(system: str, user: str, schema: type[T], retries: int) -> T:
-    from anthropic import Anthropic
+def _motivo_falha(exc: Exception) -> str:
+    if isinstance(exc, anthropic.APITimeoutError):
+        return "tempo esgotado na chamada ao modelo"
+    if isinstance(exc, anthropic.RateLimitError):
+        return "limite de requisicoes do provedor atingido"
+    if isinstance(exc, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+        return "credencial recusada pelo provedor"
+    if isinstance(exc, anthropic.BadRequestError):
+        return f"requisicao recusada pelo provedor: {exc.message}"
+    if isinstance(exc, anthropic.APIStatusError):
+        return f"erro do provedor status={exc.status_code}"
+    if isinstance(exc, anthropic.APIConnectionError):
+        return "falha de conexao com o provedor"
+    return f"falha no cliente do provedor: {type(exc).__name__}"
 
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    modelo = os.getenv("AI_MODEL_ANTHROPIC", ANTHROPIC_DEFAULT_MODEL)
-    ferramenta = {
-        "name": "responder",
-        "description": "Devolve a resposta estruturada exigida pelo schema.",
-        "input_schema": schema.model_json_schema(),
-    }
-    max_tokens = int(os.getenv("AI_MAX_COMPLETION_TOKENS", "8192"))
-    last: Exception | None = None
-    for tentativa in range(retries + 1):
-        try:
-            resposta = client.messages.create(
-                model=modelo,
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-                tools=[ferramenta],
-                tool_choice={"type": "tool", "name": "responder"},
-            )
-            for bloco in resposta.content:
-                if bloco.type == "tool_use":
-                    return schema.model_validate(bloco.input)
-            last = LLMUnavailable("anthropic nao devolveu tool_use estruturado")
-        except Exception as exc:
-            last = exc
-            logger.warning(
-                "falha na chamada estruturada anthropic model=%s tentativa=%s tipo=%s erro=%s",
-                modelo, tentativa + 1, type(exc).__name__, str(exc),
-            )
-    raise LLMUnavailable(str(last))
+
+def _chamar(requisicao: dict[str, Any], op: Operacao) -> Any:
+    timeout = timeout_da_chamada(op)
+    try:
+        return cliente().with_options(timeout=timeout).messages.create(**requisicao)
+    except anthropic.AnthropicError as exc:
+        motivo = _motivo_falha(exc)
+        logger.warning("chamada ao modelo falhou tipo=%s motivo=%s", type(exc).__name__, motivo)
+        raise LLMUnavailable(motivo) from exc
+
+
+def _texto_da_resposta(resposta: Any) -> str:
+    if resposta.stop_reason == "refusal":
+        detalhe = getattr(resposta, "stop_details", None)
+        categoria = getattr(detalhe, "category", None) if detalhe else None
+        raise LLMUnavailable(f"o modelo recusou a resposta categoria={categoria or 'nao informada'}")
+    if resposta.stop_reason == "max_tokens":
+        raise LLMUnavailable("resposta do modelo truncada no limite de tokens")
+    return "".join(bloco.text for bloco in resposta.content if bloco.type == "text")
+
+
+def _validar(texto: str, schema: type[T], validar: Callable[[T], None] | None) -> T:
+    resultado = schema.model_validate_json(texto)
+    if validar:
+        validar(resultado)
+    return resultado
+
+
+def _erro_legivel(exc: Exception) -> str:
+    if isinstance(exc, ValidationError):
+        return "; ".join(
+            f"{'.'.join(str(parte) for parte in erro['loc']) or 'resposta'}: {erro['msg']}"
+            for erro in exc.errors()
+        )
+    return str(exc)
 
 
 def complete_model(
-    system: str, user: str, schema: type[T], retries: int = 2
+    system: str,
+    user: str,
+    schema: type[T],
+    *,
+    chamador: str,
+    esforco: str,
+    validar: Callable[[T], None] | None = None,
+    max_tokens: int | None = None,
 ) -> T:
-    provider = _provider()
-    if provider not in PROVEDORES_SUPORTADOS:
-        raise LLMUnavailable(f"provedor nao suportado: {provider}")
-    if provider == "groq" and not os.getenv("GROQ_API_KEY"):
-        raise LLMUnavailable("GROQ_API_KEY ausente")
-    if provider == "openrouter" and not os.getenv("OPENROUTER_API_KEY"):
-        raise LLMUnavailable("OPENROUTER_API_KEY ausente")
-    if provider == "anthropic":
-        if not os.getenv("ANTHROPIC_API_KEY"):
-            raise LLMUnavailable("ANTHROPIC_API_KEY ausente")
-        return _completar_anthropic(system, user, schema, retries)
-
-    client, model = _client_and_model()
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
-    last: Exception | None = None
-    max_completion_tokens = int(os.getenv("AI_MAX_COMPLETION_TOKENS", "8192"))
-    reasoning_effort = os.getenv("AI_REASONING_EFFORT", "medium")
-    strict_fallback = False
-    for tentativa in range(retries + 1):
-        try:
-            params = {
-                "model": model,
-                "messages": messages,
-                "response_format": (
-                    {"type": "json_object"}
-                    if strict_fallback
-                    else _response_format(model, schema)
-                ),
-                "temperature": 0,
-                "max_completion_tokens": max_completion_tokens,
-            }
-            if provider == "groq" and _supports_reasoning_effort(model):
-                params["reasoning_effort"] = reasoning_effort
-            resp = client.chat.completions.create(**params)
-            content = _sem_fence_markdown(resp.choices[0].message.content or "{}")
-            return schema.model_validate(json.loads(content))
-        except Exception as exc:
-            last = exc
-            logger.warning(
-                "falha na chamada estruturada do modelo model=%s tentativa=%s formato=%s tipo=%s erro=%s",
-                model,
-                tentativa + 1,
-                "json_object" if strict_fallback else "json_schema",
-                type(exc).__name__,
-                str(exc),
-            )
-            if (
-                tentativa == 0
-                and not strict_fallback
-                and _response_format(model, schema).get("type") == "json_schema"
-            ):
-                strict_fallback = True
-                continue
-            messages.append(
+    if esforco not in ESFORCOS:
+        raise ValueError(f"esforco invalido: {esforco}")
+    modelo = modelo_configurado()
+    if not modelo:
+        raise LLMUnavailable("AI_MODEL ausente")
+    if not _credencial_presente():
+        raise LLMUnavailable("ANTHROPIC_API_KEY ausente")
+    op = operacao_atual()
+    requisicao = montar_requisicao(
+        modelo,
+        system,
+        user,
+        schema,
+        esforco,
+        max_tokens or _env_int("AI_MAX_TOKENS", MAX_TOKENS_PADRAO),
+    )
+    resposta = _chamar(requisicao, op)
+    texto = _texto_da_resposta(resposta)
+    try:
+        return _validar(texto, schema, validar)
+    except (ValidationError, ValidacaoSemantica) as exc:
+        erro = _erro_legivel(exc)
+        logger.warning("validacao da resposta falhou chamador=%s erro=%s", chamador, erro)
+    requisicao["messages"] = [
+        *requisicao["messages"],
+        {"role": "assistant", "content": [{"type": "text", "text": texto}]},
+        {
+            "role": "user",
+            "content": [
                 {
-                    "role": "user",
-                    "content": (
-                        "A resposta anterior era inválida. Responda APENAS com "
-                        "JSON válido exatamente no formato pedido, sem texto extra."
+                    "type": "text",
+                    "text": (
+                        "A resposta anterior nao passou na validacao: "
+                        f"{erro}. Corrija apenas o que o erro aponta e devolva a resposta completa."
                     ),
                 }
-            )
-    raise LLMUnavailable(str(last))
+            ],
+        },
+    ]
+    resposta = _chamar(requisicao, op)
+    texto = _texto_da_resposta(resposta)
+    try:
+        return _validar(texto, schema, validar)
+    except (ValidationError, ValidacaoSemantica) as exc:
+        raise LLMUnavailable(f"resposta invalida apos reparo: {_erro_legivel(exc)}") from exc

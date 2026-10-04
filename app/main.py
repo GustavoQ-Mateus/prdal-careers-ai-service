@@ -3,7 +3,8 @@ import os
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .carregador_prompts import carregar_prompts
@@ -23,7 +24,7 @@ from .generate import (
     reduzir_curriculo,
 )
 from .keywords import extract_keywords
-from .llm import LLMUnavailable
+from .llm import LLMUnavailable, PrazoEsgotado, exigir_modelo_no_boot, operacao
 from .rag import consultar, indexar, substituir
 from .seguranca import (
     HEADER_SERVICO,
@@ -60,6 +61,8 @@ from .schemas import (
 from .score import calcular_score
 
 DOC_SERVICE_URL = os.getenv("DOC_SERVICE_URL", "http://localhost:8080")
+HEADER_PRAZO = "X-Prdal-Prazo-Ms"
+HEADER_OPERACAO = "X-Prdal-Operacao"
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,7 @@ def _aquecer_embeddings() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     exigir_token_no_boot()
+    exigir_modelo_no_boot()
     prompts = carregar_prompts()
     logger.info("prompts carregados: %s", ", ".join(p.rotulo for p in prompts.values()))
     _aquecer_embeddings()
@@ -84,6 +88,25 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="ai-service", lifespan=lifespan, **rotas_de_documentacao())
 app.middleware("http")(exigir_servico)
+
+
+@app.exception_handler(PrazoEsgotado)
+def prazo_esgotado(_request: Request, exc: PrazoEsgotado) -> JSONResponse:
+    logger.warning("operacao recusada por prazo esgotado: %s", exc)
+    return JSONResponse(status_code=504, content={"detail": "prazo da operacao esgotado"})
+
+
+def _prazo_ms(valor: str | None) -> int | None:
+    if valor is None or not valor.strip():
+        return None
+    try:
+        return int(float(valor))
+    except ValueError:
+        return None
+
+
+def _operacao_llm(request: Request):
+    return operacao(_prazo_ms(request.headers.get(HEADER_PRAZO)), request.headers.get(HEADER_OPERACAO))
 
 
 class HealthResponse(BaseModel):
@@ -125,39 +148,43 @@ async def hello() -> HelloResponse:
 
 
 @app.post("/keywords", response_model=KeywordsResponse)
-def keywords(req: KeywordsRequest) -> KeywordsResponse:
-    try:
-        return KeywordsResponse(keywords=extract_keywords(req.descricao))
-    except LLMUnavailable as exc:
-        return KeywordsResponse(
-            keywords=[],
-            status="PENDENTE",
-            degradacao=registrar(KEYWORDS_INDISPONIVEIS, exc),
-        )
+def keywords(req: KeywordsRequest, request: Request) -> KeywordsResponse:
+    with _operacao_llm(request):
+        try:
+            return KeywordsResponse(keywords=extract_keywords(req.descricao))
+        except LLMUnavailable as exc:
+            return KeywordsResponse(
+                keywords=[],
+                status="PENDENTE",
+                degradacao=registrar(KEYWORDS_INDISPONIVEIS, exc),
+            )
 
 
 @app.post("/generate-cv", response_model=GenerateCvResponse)
-def generate(req: GenerateCvRequest) -> GenerateCvResponse:
-    try:
-        return GenerateCvResponse(markdown=generate_cv(req))
-    except KeywordsUnavailable as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+def generate(req: GenerateCvRequest, request: Request) -> GenerateCvResponse:
+    with _operacao_llm(request):
+        try:
+            return GenerateCvResponse(markdown=generate_cv(req))
+        except KeywordsUnavailable as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/generate-cv-pipeline", response_model=GeneratePipelineResponse)
-def generate_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
-    try:
-        return generate_cv_pipeline(req)
-    except KeywordsUnavailable as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+def generate_pipeline(req: GenerateCvRequest, request: Request) -> GeneratePipelineResponse:
+    with _operacao_llm(request):
+        try:
+            return generate_cv_pipeline(req)
+        except KeywordsUnavailable as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/reduzir-curriculo", response_model=GeneratePipelineResponse)
-def reduzir(req: ReduzirCvRequest) -> GeneratePipelineResponse:
-    try:
-        return reduzir_curriculo(req, req.markdown_atual)
-    except KeywordsUnavailable as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+def reduzir(req: ReduzirCvRequest, request: Request) -> GeneratePipelineResponse:
+    with _operacao_llm(request):
+        try:
+            return reduzir_curriculo(req, req.markdown_atual)
+        except KeywordsUnavailable as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/analisar-ats", response_model=AtsAnalysis)
@@ -201,28 +228,31 @@ def context_query(req: QueryRequest) -> QueryResponse:
 
 
 @app.post("/copiloto/turn", response_model=TurnResponse)
-def copiloto_turn(req: TurnRequest) -> TurnResponse:
-    try:
-        return planejar_turno(req)
-    except LLMUnavailable as exc:
-        raise HTTPException(status_code=503, detail=registrar(COPILOTO_INDISPONIVEL, exc)) from exc
+def copiloto_turn(req: TurnRequest, request: Request) -> TurnResponse:
+    with _operacao_llm(request):
+        try:
+            return planejar_turno(req)
+        except LLMUnavailable as exc:
+            raise HTTPException(status_code=503, detail=registrar(COPILOTO_INDISPONIVEL, exc)) from exc
 
 
 @app.post("/copiloto/redigir-mensagem", response_model=RedigirMensagemResponse)
 def copiloto_redigir_mensagem(
-    req: RedigirMensagemRequest,
+    req: RedigirMensagemRequest, request: Request
 ) -> RedigirMensagemResponse:
-    try:
-        return redigir_mensagem(req)
-    except LLMUnavailable as exc:
-        raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc
+    with _operacao_llm(request):
+        try:
+            return redigir_mensagem(req)
+        except LLMUnavailable as exc:
+            raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc
 
 
 @app.post("/copiloto/redigir-formulario", response_model=RedigirFormularioResponse)
 def copiloto_redigir_formulario(
-    req: RedigirFormularioRequest,
+    req: RedigirFormularioRequest, request: Request
 ) -> RedigirFormularioResponse:
-    try:
-        return redigir_formulario(req)
-    except LLMUnavailable as exc:
-        raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc
+    with _operacao_llm(request):
+        try:
+            return redigir_formulario(req)
+        except LLMUnavailable as exc:
+            raise HTTPException(status_code=503, detail=registrar(REDACAO_INDISPONIVEL, exc)) from exc

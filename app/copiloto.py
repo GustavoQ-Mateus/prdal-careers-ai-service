@@ -2,17 +2,23 @@ import json
 import re
 import unicodedata
 
-from .llm import LLMUnavailable, complete_model
+from .llm import LLMUnavailable, ValidacaoSemantica, complete_model
 from .schemas import (
+    FormularioLlm,
+    MensagemLlm,
     PerfilMestre,
     RedigirFormularioRequest,
     RedigirFormularioResponse,
     RedigirMensagemRequest,
     RedigirMensagemResponse,
+    TurnoLlm,
     TurnRequest,
     TurnResponse,
     Vaga,
 )
+
+ESFORCO_TURNO = "medium"
+ESFORCO_REDACAO = "medium"
 
 SYSTEM_TURNO = (
     "Voce e o copiloto de candidatura, um agente que conduz o candidato pela "
@@ -68,9 +74,9 @@ SYSTEM_TURNO = (
     "linguagem de produto. Nunca cite identificadores de ferramentas, rotas, "
     "payloads, JSON ou instrucoes internas. Fale em portugues, no escopo do "
     "candidato. "
-    "Responda SEMPRE em JSON no formato "
-    '{"tipo":"texto"|"tool_call","texto":"...","tool":"...","args":{...}}. '
-    "Use tipo texto quando for so conversar e tipo tool_call quando acionar uma tool."
+    "Responda sempre no formato estruturado pedido. Use tipo texto quando for so "
+    "conversar, com a resposta em texto. Use tipo tool_call quando acionar uma tool, "
+    "com o nome da tool em tool e os argumentos como objeto JSON serializado em argsJson."
 )
 
 _FERRAMENTAS_INTERNAS = (
@@ -223,11 +229,27 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
     narracao = _narracao_ats_concluida(req)
     if narracao:
         return narracao
-    res = complete_model(SYSTEM_TURNO, _user(req), TurnResponse)
-    if res.tipo not in ("texto", "tool_call"):
-        raise LLMUnavailable(f"tipo de turno invalido: {res.tipo!r}")
+    nomes = {tool.nome for tool in req.tools}
+
+    def exigir_turno_util(turno: TurnoLlm) -> None:
+        if turno.tipo == "tool_call":
+            if not (turno.tool or "").strip():
+                raise ValidacaoSemantica("tool_call sem o nome da tool")
+            if nomes and turno.tool not in nomes:
+                raise ValidacaoSemantica(f"tool fora do catalogo: {turno.tool}")
+        elif not (turno.texto or "").strip():
+            raise ValidacaoSemantica("turno de texto sem texto")
+
+    res = complete_model(
+        SYSTEM_TURNO,
+        _user(req),
+        TurnoLlm,
+        chamador="copiloto_turno",
+        esforco=ESFORCO_TURNO,
+        validar=exigir_turno_util,
+    )
     if res.tipo == "tool_call" and res.tool:
-        return res
+        return TurnResponse(tipo="tool_call", texto=res.texto, tool=res.tool, args=res.args())
     texto = _texto_para_candidato(res.texto or "", req).strip()
     if not texto:
         raise LLMUnavailable("turno sem texto e sem tool")
@@ -261,10 +283,22 @@ def redigir_mensagem(req: RedigirMensagemRequest) -> RedigirMensagemResponse:
         'Devolva JSON {"titulo":"...","texto":"...","destino":"..."} com a mensagem '
         "pronta para copiar."
     )
-    res = complete_model(SYSTEM_MENSAGEM, user, RedigirMensagemResponse)
+    res = complete_model(
+        SYSTEM_MENSAGEM,
+        user,
+        MensagemLlm,
+        chamador="redigir_mensagem",
+        esforco=ESFORCO_REDACAO,
+        validar=_exigir_mensagem,
+    )
     if not res.texto.strip():
         raise LLMUnavailable("mensagem ao recrutador vazia")
-    return res
+    return RedigirMensagemResponse(titulo=res.titulo, texto=res.texto, destino=res.destino)
+
+
+def _exigir_mensagem(res: MensagemLlm) -> None:
+    if not res.texto.strip():
+        raise ValidacaoSemantica("mensagem ao recrutador vazia")
 
 
 SYSTEM_FORMULARIO = (
@@ -284,7 +318,19 @@ def redigir_formulario(req: RedigirFormularioRequest) -> RedigirFormularioRespon
         'Devolva JSON {"titulo":"...","respostas":[{"campo":"...","texto":"..."}],'
         '"texto":"..."} com uma resposta por campo e um texto consolidado.'
     )
-    res = complete_model(SYSTEM_FORMULARIO, user, RedigirFormularioResponse)
+    res = complete_model(
+        SYSTEM_FORMULARIO,
+        user,
+        FormularioLlm,
+        chamador="redigir_formulario",
+        esforco=ESFORCO_REDACAO,
+        validar=_exigir_respostas,
+    )
     if not res.respostas or not any(r.texto.strip() for r in res.respostas):
         raise LLMUnavailable("respostas de formulario vazias")
-    return res
+    return RedigirFormularioResponse(titulo=res.titulo, respostas=res.respostas, texto=res.texto)
+
+
+def _exigir_respostas(res: FormularioLlm) -> None:
+    if not res.respostas or not any(r.texto.strip() for r in res.respostas):
+        raise ValidacaoSemantica("nenhuma resposta de formulario preenchida")

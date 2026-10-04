@@ -11,9 +11,9 @@ from .schemas import (
     AtsAnalysis,
     ExperienciaPerfil,
     GenerateCvRequest,
-    GenerateCvResponse,
     GeneratePipelineResponse,
     PerfilMestre,
+    ReescritaLlm,
 )
 from .score import calcular_score
 from .secoes import cabecalhos
@@ -35,6 +35,7 @@ class KeywordsUnavailable(ValueError):
 
 
 PROMPT_REESCRITA = "reescrita"
+ESFORCO_REESCRITA = "high"
 MARCADOR_CONTATO = "[CONTATO]"
 
 TECH_CATALOG = (
@@ -775,7 +776,9 @@ def _gerar_llm(
     res = complete_model(
         _system_prompt(),
         _user(req, analise, lacunas, markdown_atual=markdown_atual, erros=erros),
-        GenerateCvResponse,
+        ReescritaLlm,
+        chamador="reescrita",
+        esforco=ESFORCO_REESCRITA,
     )
     return _limpar_markdown(res.markdown, req) if res.markdown.strip() else ""
 

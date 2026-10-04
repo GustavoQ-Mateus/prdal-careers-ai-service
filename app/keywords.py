@@ -1,8 +1,10 @@
 import re
 import unicodedata
 
-from .llm import LLMUnavailable, complete_model
+from .llm import LLMUnavailable, ValidacaoSemantica, complete_model
 from .schemas import Keyword, KeywordsLlmResponse
+
+ESFORCO = "low"
 
 TIPOS_VALIDOS = {"stack", "ferramenta", "metodologia", "dominio_negocio", "certificacao"}
 
@@ -53,8 +55,20 @@ def _validar_keyword(keyword) -> bool:
     return True
 
 
+def _exigir_keyword_valida(res: KeywordsLlmResponse) -> None:
+    if not any(_validar_keyword(item) for item in res.keywords):
+        raise ValidacaoSemantica("nenhuma palavra-chave tecnica valida nas cinco categorias permitidas")
+
+
 def extract_keywords(descricao: str) -> list[Keyword]:
-    res = complete_model(SYSTEM, _user(descricao), KeywordsLlmResponse)
+    res = complete_model(
+        SYSTEM,
+        _user(descricao),
+        KeywordsLlmResponse,
+        chamador="keywords",
+        esforco=ESFORCO,
+        validar=_exigir_keyword_valida,
+    )
     keywords = [
         Keyword(termo=item.termo.strip(), peso=item.peso, tipo=item.tipo)
         for item in res.keywords

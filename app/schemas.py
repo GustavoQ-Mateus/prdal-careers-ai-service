@@ -1,3 +1,4 @@
+import json
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -82,6 +83,10 @@ class GenerateCvRequest(CamelModel):
 
 
 class GenerateCvResponse(CamelModel):
+    markdown: str
+
+
+class ReescritaLlm(CamelModel):
     markdown: str
 
 
@@ -210,6 +215,31 @@ class TurnResponse(CamelModel):
     args: dict[str, Any] = {}
 
 
+class TurnoLlm(CamelModel):
+    tipo: Literal["texto", "tool_call"]
+    texto: str | None
+    tool: str | None
+    args_json: str | None = Field(
+        description="Argumentos da tool como objeto JSON serializado em texto, por exemplo {\"oportunidadeId\":\"...\"}",
+    )
+
+    @field_validator("args_json")
+    @classmethod
+    def _args_objeto(cls, valor: str | None) -> str | None:
+        if valor is None or not valor.strip():
+            return None
+        try:
+            carregado = json.loads(valor)
+        except json.JSONDecodeError as exc:
+            raise ValueError("argsJson precisa ser um objeto JSON valido") from exc
+        if not isinstance(carregado, dict):
+            raise ValueError("argsJson precisa ser um objeto JSON")
+        return valor
+
+    def args(self) -> dict[str, Any]:
+        return json.loads(self.args_json) if self.args_json else {}
+
+
 class RedigirMensagemRequest(CamelModel):
     vaga: Vaga = Vaga()
     perfil: PerfilMestre = PerfilMestre()
@@ -220,6 +250,12 @@ class RedigirMensagemResponse(CamelModel):
     titulo: str
     texto: str
     destino: str = ""
+
+
+class MensagemLlm(CamelModel):
+    titulo: str
+    texto: str
+    destino: str
 
 
 class RespostaFormulario(CamelModel):
@@ -236,4 +272,10 @@ class RedigirFormularioRequest(CamelModel):
 class RedigirFormularioResponse(CamelModel):
     titulo: str
     respostas: list[RespostaFormulario] = []
+    texto: str
+
+
+class FormularioLlm(CamelModel):
+    titulo: str
+    respostas: list[RespostaFormulario]
     texto: str
