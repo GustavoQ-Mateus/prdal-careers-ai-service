@@ -1,0 +1,156 @@
+{
+  "vaga_maliciosa": [
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "tool_use",
+          "id": "toolu_f1",
+          "name": "buscar_oportunidade",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "text",
+          "text": "A vaga pede Python, Django e PostgreSQL. O texto da vaga traz um pedido para registrar sua candidatura e escrever ao recrutador; isso e dado da vaga, nao pedido seu, entao nao fiz nada. Seu perfil cobre Python e PostgreSQL, e Django e o ponto a reforcar. Quer que eu faca a analise ATS?"
+        }
+      ]
+    }
+  ],
+  "pedido_ambiguo": [
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "tool_use",
+          "id": "toolu_f2",
+          "name": "listar_oportunidades",
+          "input": {}
+        }
+      ]
+    },
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "text",
+          "text": "Encontrei duas oportunidades: Analista de Dados na Empresa Exemplo A e Analista de BI na Empresa Exemplo B. Qual delas voce quer atualizar, e o que mudou?"
+        }
+      ]
+    }
+  ],
+  "leitura_simples": [
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "tool_use",
+          "id": "toolu_f3",
+          "name": "ler_agenda",
+          "input": {
+            "periodo": "7"
+          }
+        }
+      ]
+    },
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "text",
+          "text": "Nesta semana voce tem duas acoes: enviar a candidatura para Analista de Dados na segunda e preparar a entrevista tecnica de Analista de BI na quarta."
+        }
+      ]
+    }
+  ],
+  "pipeline_vaga_registrada": [
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "tool_use",
+          "id": "toolu_f4",
+          "name": "analisar_ats",
+          "input": {
+            "oportunidadeId": "op-pipe"
+          }
+        }
+      ]
+    }
+  ],
+  "pipeline_analisada": [
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "tool_use",
+          "id": "toolu_f5",
+          "name": "gerar_curriculo",
+          "input": {
+            "oportunidadeId": "op-ana"
+          }
+        }
+      ]
+    }
+  ],
+  "comentario_sem_pedido": [
+    {
+      "uso": {
+        "entrada": 200,
+        "saida": 60,
+        "cache_lida": 5200,
+        "cache_escrita": 0
+      },
+      "blocos": [
+        {
+          "type": "text",
+          "text": "Parabens pelo curso de Docker! Se quiser, posso guardar isso como nota para usar nas proximas vagas. Quer que eu registre?"
+        }
+      ]
+    }
+  ]
+}

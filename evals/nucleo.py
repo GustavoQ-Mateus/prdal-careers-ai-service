@@ -1,6 +1,6 @@
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,6 +97,7 @@ def medir(uso: Uso) -> Iterator[Operacao]:
 @dataclass
 class Requisicao:
     corpo: dict[str, Any]
+    estimativa: int | None = None
     resposta: Any = None
 
 
@@ -104,12 +105,13 @@ class Requisicao:
 class Gravador:
     alvo: Any
     requisicoes: list[Requisicao] = field(default_factory=list)
+    estimar: Callable[[dict[str, Any]], int] | None = None
 
     def __post_init__(self) -> None:
         self.messages = _MensagensGravadas(self)
 
     def with_options(self, **opcoes: Any) -> "Gravador":
-        return Gravador(self.alvo.with_options(**opcoes), self.requisicoes)
+        return Gravador(self.alvo.with_options(**opcoes), self.requisicoes, self.estimar)
 
 
 class _MensagensGravadas:
@@ -117,7 +119,8 @@ class _MensagensGravadas:
         self._dono = dono
 
     def create(self, **corpo: Any) -> Any:
-        registro = Requisicao(corpo=corpo)
+        estimativa = self._dono.estimar(corpo) if self._dono.estimar else None
+        registro = Requisicao(corpo=corpo, estimativa=estimativa)
         self._dono.requisicoes.append(registro)
         registro.resposta = self._dono.alvo.messages.create(**corpo)
         return registro.resposta
@@ -130,9 +133,9 @@ class _MensagensGravadas:
 
 
 @contextmanager
-def gravando() -> Iterator[Gravador]:
+def gravando(estimar: Callable[[dict[str, Any]], int] | None = None) -> Iterator[Gravador]:
     anterior = llm.cliente()
-    gravador = Gravador(anterior)
+    gravador = Gravador(anterior, estimar=estimar)
     llm.definir_cliente(gravador)
     try:
         yield gravador

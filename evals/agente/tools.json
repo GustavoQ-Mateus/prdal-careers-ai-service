@@ -1,0 +1,614 @@
+{
+  "tools": [
+    {
+      "name": "listar_oportunidades",
+      "description": "Lista oportunidades do candidato, com filtros de visao e busca",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "visao": {
+            "type": "string",
+            "enum": [
+              "ativas",
+              "encerradas",
+              "entrada"
+            ],
+            "description": "ativas (padrao), encerradas ou entrada (vagas ainda nao ativadas)"
+          },
+          "busca": {
+            "type": "string",
+            "description": "texto livre sobre titulo e empresa"
+          },
+          "categoria": {
+            "type": "string"
+          },
+          "nivel": {
+            "type": "string"
+          },
+          "prioridade": {
+            "type": "string",
+            "enum": [
+              "BAIXA",
+              "MEDIA",
+              "ALTA"
+            ]
+          },
+          "ordenarPor": {
+            "type": "string",
+            "enum": [
+              "prioridade",
+              "score",
+              "keywords",
+              "etapa",
+              "prazo"
+            ]
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "buscar_oportunidade",
+      "description": "Detalha uma oportunidade",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "abrir_workspace",
+      "description": "Abre o workspace com candidatura, curriculos e acoes da oportunidade",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "ler_timeline",
+      "description": "Le o historico da oportunidade, do mais recente para o mais antigo",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "format": "date-time",
+            "description": "data ISO; traz eventos anteriores a ela"
+          },
+          "limite": {
+            "type": "integer",
+            "description": "quantidade de eventos, de 1 a 100"
+          },
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "listar_acoes",
+      "description": "Lista as acoes de agenda da oportunidade",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "ler_perfil",
+      "description": "Le o perfil-mestre do candidato, sem dados de contato",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "listar_curriculos",
+      "description": "Lista curriculos gerados",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "vagaId": {
+            "type": "string",
+            "description": "id da oportunidade"
+          },
+          "scoreMinimo": {
+            "type": "integer",
+            "description": "score ATS minimo, de 0 a 100"
+          },
+          "vinculado": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "true para curriculos ja usados em candidatura, false para os demais"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "buscar_curriculo",
+      "description": "Le um curriculo concluido com o score e o breakdown ATS deterministico",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "curriculoId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "curriculoId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "status_geracao",
+      "description": "Consulta uma geracao de curriculo pelo id devolvido ao inicia-la",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "description": "id devolvido por gerar_curriculo"
+          }
+        },
+        "required": [
+          "jobId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "listar_banco_vagas",
+      "description": "Lista o banco de vagas importadas",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ler_agenda",
+      "description": "Le a agenda de proximos passos do candidato",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "de": {
+            "type": "string",
+            "description": "data ISO inicial"
+          },
+          "ate": {
+            "type": "string",
+            "description": "data ISO final"
+          },
+          "periodo": {
+            "type": "string",
+            "enum": [
+              "7",
+              "30",
+              "90"
+            ],
+            "description": "janela em dias a partir de hoje"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "registrar_oportunidade",
+      "description": "Registra uma oportunidade a partir da descricao de uma vaga",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "titulo": {
+            "type": "string"
+          },
+          "empresa": {
+            "type": "string"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "fonte": {
+            "type": "string",
+            "description": "url ou origem da vaga"
+          }
+        },
+        "required": [
+          "titulo",
+          "empresa",
+          "descricao"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "ativar_entrada",
+      "description": "Ativa uma entrada da visao de entrada como oportunidade",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "entradaId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entradaId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "ativar_banco_vaga",
+      "description": "Ativa uma vaga do banco de vagas como oportunidade",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "bancoVagaId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bancoVagaId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "analisar_ats",
+      "description": "Analise ATS do perfil-mestre contra a vaga: score, keywords encontradas e ausentes, pontos eliminatorios e veredicto",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "gerar_curriculo",
+      "description": "Pede ao candidato a confirmacao da reescrita otimizada do curriculo para a vaga; confirmada, a geracao roda em segundo plano e a conclusao chega na conversa",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "editar_curriculo",
+      "description": "Substitui o markdown de um curriculo e recomputa o score",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "curriculoId": {
+            "type": "string"
+          },
+          "markdown": {
+            "type": "string",
+            "description": "curriculo completo em markdown"
+          },
+          "rotulo": {
+            "type": "string",
+            "description": "nome curto da versao"
+          }
+        },
+        "required": [
+          "curriculoId",
+          "markdown"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "definir_proximo_passo",
+      "description": "Cria uma acao na agenda da oportunidade. Nao serve para acompanhar geracao de curriculo (use status_geracao) nem para redigir mensagem ao recrutador (use redigir_mensagem_recrutador)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          },
+          "titulo": {
+            "type": "string",
+            "description": "o que o candidato vai fazer"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "REVISAR_VAGA",
+              "GERAR_CURRICULO",
+              "ENVIAR_CANDIDATURA",
+              "FAZER_FOLLOW_UP",
+              "PREPARAR_ENTREVISTA",
+              "PARTICIPAR_ENTREVISTA",
+              "ENVIAR_MATERIAL",
+              "OUTRO"
+            ],
+            "description": "categoria da acao"
+          },
+          "principal": {
+            "type": "boolean",
+            "description": "marca como o proximo passo principal da oportunidade"
+          },
+          "venceEm": {
+            "type": "string",
+            "format": "date-time",
+            "description": "prazo em data ISO"
+          },
+          "lembrarEm": {
+            "type": "string",
+            "format": "date-time",
+            "description": "lembrete em data ISO"
+          }
+        },
+        "required": [
+          "titulo",
+          "tipo"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "concluir_passo",
+      "description": "Conclui uma acao de agenda",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "acaoId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "acaoId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "mover_estagio",
+      "description": "Move a oportunidade para outro estagio do pipeline",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          },
+          "destino": {
+            "type": "string",
+            "enum": [
+              "PREPARACAO",
+              "INSCRITA",
+              "EM_PROCESSO",
+              "ENTREVISTA",
+              "OFERTA",
+              "REJEITADA",
+              "DESISTIU",
+              "ARQUIVADA",
+              "REABRIR"
+            ]
+          },
+          "motivo": {
+            "type": "string",
+            "description": "motivo da mudanca, quando houver"
+          }
+        },
+        "required": [
+          "destino"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "registrar_candidatura",
+      "description": "Registra a candidatura depois que o candidato se inscreveu",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "vagaId": {
+            "type": "string",
+            "description": "id da oportunidade"
+          },
+          "curriculoId": {
+            "type": "string",
+            "description": "curriculo usado na inscricao"
+          }
+        },
+        "required": [
+          "vagaId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "atualizar_candidatura",
+      "description": "Atualiza status, notas ou curriculo de uma candidatura",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "candidaturaId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RASCUNHO",
+              "INSCRITA",
+              "EM_PROCESSO",
+              "ENTREVISTA",
+              "OFERTA",
+              "REJEITADA",
+              "DESISTIU"
+            ]
+          },
+          "notas": {
+            "type": "string"
+          },
+          "curriculoId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidaturaId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "registrar_nota",
+      "description": "Registra uma nota no historico da oportunidade",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade; quando omitido, vale a oportunidade em foco"
+          },
+          "descricao": {
+            "type": "string",
+            "description": "texto da nota"
+          }
+        },
+        "required": [
+          "descricao"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "redigir_mensagem_recrutador",
+      "description": "Redige a mensagem ao recrutador e entrega o texto para o candidato revisar e enviar",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade"
+          },
+          "contexto": {
+            "type": "string",
+            "description": "contexto dado pelo candidato"
+          }
+        },
+        "required": [
+          "oportunidadeId"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    },
+    {
+      "name": "redigir_respostas_formulario",
+      "description": "Redige respostas para campos de formulario de candidatura e entrega o texto para o candidato usar",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "oportunidadeId": {
+            "type": "string",
+            "description": "id da oportunidade"
+          },
+          "campos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "perguntas do formulario"
+          }
+        },
+        "required": [
+          "oportunidadeId",
+          "campos"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    }
+  ],
+  "efeitos": {
+    "listar_oportunidades": "leitura",
+    "buscar_oportunidade": "leitura",
+    "abrir_workspace": "leitura",
+    "ler_timeline": "leitura",
+    "listar_acoes": "leitura",
+    "ler_perfil": "leitura",
+    "listar_curriculos": "leitura",
+    "buscar_curriculo": "leitura",
+    "status_geracao": "leitura",
+    "listar_banco_vagas": "leitura",
+    "ler_agenda": "leitura",
+    "registrar_oportunidade": "escrita",
+    "ativar_entrada": "escrita",
+    "ativar_banco_vaga": "escrita",
+    "analisar_ats": "leitura",
+    "gerar_curriculo": "escrita",
+    "editar_curriculo": "escrita",
+    "definir_proximo_passo": "escrita",
+    "concluir_passo": "escrita",
+    "mover_estagio": "escrita",
+    "registrar_candidatura": "escrita",
+    "atualizar_candidatura": "escrita",
+    "registrar_nota": "escrita",
+    "redigir_mensagem_recrutador": "entrega_externa",
+    "redigir_respostas_formulario": "entrega_externa"
+  }
+}
