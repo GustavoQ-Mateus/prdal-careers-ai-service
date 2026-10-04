@@ -254,7 +254,7 @@ def context_replace(req: ReplaceIngestRequest) -> IngestResponse:
 
 @app.post("/context/query", response_model=QueryResponse)
 def context_query(req: QueryRequest) -> QueryResponse:
-    return consultar(req.usuario_id, req.query, req.k)
+    return consultar(req.usuario_id, req.todas(), req.k)
 
 
 @app.post("/copiloto/turn", response_model=TurnResponse)

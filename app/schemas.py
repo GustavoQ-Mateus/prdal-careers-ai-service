@@ -5,6 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
+TipoFonte = Literal[
+    "experiencia", "resumo", "skills", "formacao", "certificacao", "idiomas", "nota", "candidatura"
+]
+
+
 class CamelModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -137,11 +142,30 @@ class PerfilMestre(CamelModel):
     skills: list[str] = []
 
 
+class FonteContexto(CamelModel):
+    id: str
+    tipo: TipoFonte = "nota"
+    factual: bool = False
+    titulo: str = ""
+    texto: str
+
+
 class GenerateCvRequest(CamelModel):
     perfil_mestre: PerfilMestre
     vaga: Vaga
     keywords: list[Keyword] = []
-    contexto: list[str] = []
+    contexto: list[FonteContexto] = []
+
+    @field_validator("contexto", mode="before")
+    @classmethod
+    def _contexto_em_texto_e_apoio(cls, valor: Any) -> Any:
+        if not isinstance(valor, list):
+            return valor
+        return [
+            {"id": f"contexto-{indice + 1}", "tipo": "nota", "factual": False, "texto": item}
+            if isinstance(item, str) else item
+            for indice, item in enumerate(valor)
+        ]
 
 
 class GenerateCvResponse(ComUso):
@@ -213,11 +237,6 @@ class TaxonomiaResponse(CamelModel):
     niveis: list[str] = []
 
 
-TipoFonte = Literal[
-    "experiencia", "resumo", "skills", "formacao", "certificacao", "idiomas", "nota", "candidatura"
-]
-
-
 class Documento(CamelModel):
     usuario_id: str
     origem: str
@@ -243,14 +262,22 @@ class IngestResponse(CamelModel):
 
 class QueryRequest(CamelModel):
     usuario_id: str
-    query: str
+    query: str = ""
+    consultas: list[str] = []
     k: int = 5
+
+    def todas(self) -> list[str]:
+        return self.consultas or [self.query]
 
 
 class Chunk(CamelModel):
+    id: str
+    tipo: TipoFonte
+    factual: bool = False
+    titulo: str = ""
     texto: str
-    origem: str
-    titulo: str
+    origem: str = ""
+    similaridade: float | None = None
 
 
 class QueryResponse(CamelModel):

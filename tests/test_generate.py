@@ -22,7 +22,7 @@ from app.generate import (
     reduzir_curriculo,
 )
 from app.llm import LLMUnavailable
-from app.schemas import GenerateCvRequest, GenerateCvResponse, PerfilMestre
+from app.schemas import FonteContexto, GenerateCvRequest, GenerateCvResponse, PerfilMestre
 
 
 def _req_tres_experiencias() -> GenerateCvRequest:
@@ -481,7 +481,7 @@ class ErrosMetricasTest(unittest.TestCase):
 
     def test_aceita_percentual_com_correspondencia_literal_no_contexto(self):
         req = self.req.model_copy(deep=True)
-        req.contexto = ["Reduzi o tempo de processamento em 40% no ultimo trimestre."]
+        req.contexto = [FonteContexto(id="n1", texto="Reduzi o tempo de processamento em 40% no ultimo trimestre.")]
         markdown = "- Reduzi o tempo de processamento em 40% usando Java."
 
         self.assertEqual([], _erros_metricas(markdown, req))

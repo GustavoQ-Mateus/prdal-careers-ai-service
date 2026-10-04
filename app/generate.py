@@ -122,7 +122,7 @@ def _user(
         f"Vaga: {req.vaga.titulo} @ {req.vaga.empresa}\n"
         f"Descricao da vaga:\n{req.vaga.descricao}\n\n"
         f"Palavras-chave a priorizar: {termos}\n\n"
-        f"Contexto adicional:\n{chr(10).join(req.contexto)}\n\n"
+        f"Contexto adicional:\n{chr(10).join(c.texto for c in req.contexto)}\n\n"
         + (f"Markdown atual para reescrever sem perder fatos:\n{markdown_atual}\n" if markdown_atual else "")
     )
 
@@ -191,7 +191,7 @@ def _fonte_factual(req: GenerateCvRequest) -> str:
     return "\n".join(
         [
             _texto_perfil(req.perfil_mestre),
-            "\n".join(req.contexto),
+            "\n".join(c.texto for c in req.contexto),
         ]
     )
 

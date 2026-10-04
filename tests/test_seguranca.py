@@ -21,7 +21,7 @@ SUBSTITUICAO = {"usuarioId": "usuario-vitima", "documentos": []}
 
 
 def _consulta_falsa(*_args, **_kwargs):
-    return QueryResponse(chunks=[Chunk(texto="nota privada", origem="nota", titulo="Nota")])
+    return QueryResponse(chunks=[Chunk(id="n1", tipo="nota", texto="nota privada", origem="nota", titulo="Nota")])
 
 
 @patch("app.main.substituir", return_value=IngestResponse(indexados=0))
