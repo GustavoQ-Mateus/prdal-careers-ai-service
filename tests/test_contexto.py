@@ -231,6 +231,28 @@ class JanelaDeContextoTest(unittest.TestCase):
         self.assertIn("conteudo encurtado para caber no orcamento", conteudo)
         self.assertTrue(conteudo.endswith("</dado_nao_confiavel>"))
 
+    def test_mesmo_payload_e_contado_uma_vez_pela_api(self):
+        req = TurnRequest.model_validate(
+            {
+                "trocas": [{"indice": 0, "mensagens": [usuario("ver"), chamada("t1"), resultado("t1", "y" * 40000)]}],
+                "tools": [TOOL],
+            }
+        )
+        contados = []
+
+        def contar(payload):
+            contados.append(json.dumps(payload, sort_keys=True))
+            return len(json.dumps(payload)) // 3
+
+        with Ambiente(ClienteDeConversa(contar=contar), AI_ORCAMENTO_ENTRADA_TOKENS="3000"):
+            payload, _ = montar_contexto(req, SYSTEM, [TOOL])
+            self.assertIn("conteudo encurtado", payload["messages"][-1]["content"][0]["content"])
+            self.assertEqual(len(contados), len(set(contados)))
+            self.assertGreaterEqual(len(contados), 2)
+            antes = len(contados)
+            contador.contar(payload)
+            self.assertEqual(antes, len(contados))
+
     def test_linha_de_referencia_cita_ids_sem_repetir(self):
         linha = linha_de_referencia("listar_curriculos", json.dumps([{"id": "cv-1"}, {"id": "cv-1", "vagaId": "v-2"}]))
         self.assertEqual(

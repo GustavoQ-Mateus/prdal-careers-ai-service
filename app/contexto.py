@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import logging
 import math
@@ -19,6 +20,7 @@ CARACTERES_RESERVADOS_AO_RESUMO = 1500
 ESFORCO_RESUMO = "low"
 MAX_TOKENS_RESUMO = 1500
 TIMEOUT_CONTAGEM_S = 10.0
+CONTAGENS_GUARDADAS = 16
 CHAVES_DE_ID = ("id", "curriculoId", "jobId", "oportunidadeId", "vagaId", "acaoId", "candidaturaId", "entradaId")
 _ID_CITADO = re.compile(rf'"({"|".join(CHAVES_DE_ID)})"\s*:\s*"([^"]{{1,100}})"')
 
@@ -59,6 +61,7 @@ class Contador:
         with self._trava:
             self.fator = 1.0
             self.api_indisponivel = False
+            self._contagens: dict[str, int] = {}
 
     def _bruto(self, payload: Any) -> float:
         texto = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -77,10 +80,26 @@ class Contador:
     def _usar_api(self) -> bool:
         return os.getenv("AI_CONTAGEM_TOKENS", "api").strip().lower() != "estimativa" and not self.api_indisponivel
 
+    def _chave(self, modelo: str, payload: dict[str, Any]) -> str:
+        texto = json.dumps([modelo, payload], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(texto.encode("utf-8")).hexdigest()
+
+    def _guardar(self, chave: str, reais: int) -> None:
+        with self._trava:
+            self._contagens.pop(chave, None)
+            self._contagens[chave] = reais
+            while len(self._contagens) > CONTAGENS_GUARDADAS:
+                self._contagens.pop(next(iter(self._contagens)))
+
     def contar(self, payload: dict[str, Any]) -> int:
         modelo = modelo_configurado()
         if not modelo or not self._usar_api():
             return self.estimar(payload)
+        chave = self._chave(modelo, payload)
+        with self._trava:
+            guardada = self._contagens.get(chave)
+        if guardada is not None:
+            return guardada
         try:
             resposta = cliente().with_options(timeout=TIMEOUT_CONTAGEM_S, max_retries=0).messages.count_tokens(
                 model=modelo,
@@ -95,6 +114,7 @@ class Contador:
                 self.api_indisponivel = True
             return self.estimar(payload)
         self.calibrar(payload, reais)
+        self._guardar(chave, reais)
         return reais
 
 
