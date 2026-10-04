@@ -180,7 +180,9 @@ def _espera_antes_de_repetir(exc: Exception, repeticao: int) -> float:
 
 def _cabe_nova_tentativa(op: Operacao, espera: float) -> bool:
     restante = op.restante_s()
-    return restante is None or restante - espera >= _piso_s()
+    if restante is None:
+        return espera <= _teto_s()
+    return restante - espera >= _piso_s()
 
 
 _cliente: Any = None
