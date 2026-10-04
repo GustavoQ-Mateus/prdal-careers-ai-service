@@ -52,10 +52,12 @@ class ClienteFalso:
         self.requisicoes = []
         self.timeouts = []
         self._timeout_atual = None
+        self.max_retries = []
         self.messages = _Mensagens(self)
 
-    def with_options(self, timeout=None, **_):
+    def with_options(self, timeout=None, max_retries=None, **_):
         self._timeout_atual = timeout
+        self.max_retries.append(max_retries)
         return self
 
 
@@ -68,7 +70,7 @@ class ComClienteFalso:
 
     def __enter__(self):
         self._anterior = llm._cliente
-        for chave, valor in {"AI_MODEL": self._modelo, "ANTHROPIC_API_KEY": "sk-teste"}.items():
+        for chave, valor in {"AI_MODEL": self._modelo, "ANTHROPIC_API_KEY": "sk-teste", "AI_MAX_RETRIES": "0"}.items():
             self._env[chave] = os.environ.get(chave)
             os.environ[chave] = valor
         llm.definir_cliente(self.cliente)

@@ -22,6 +22,9 @@ MAX_TOKENS_PADRAO = 16000
 TIMEOUT_TETO_PADRAO_S = 120.0
 TIMEOUT_PISO_PADRAO_S = 5.0
 MAX_RETRIES_PADRAO = 2
+ESPERA_INICIAL_S = 0.5
+ESPERA_MAXIMA_S = 8.0
+STATUS_REPETIVEIS = (408, 409, 429)
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +137,50 @@ def timeout_da_chamada(op: Operacao) -> float:
     restante = op.restante_s()
     if restante is None:
         return _teto_s()
-    if restante <= 0:
+    if restante <= 0 or restante < _piso_s():
         raise PrazoEsgotado("prazo da operacao esgotado antes da chamada ao modelo")
-    return max(_piso_s(), min(restante, _teto_s()))
+    return min(restante, _teto_s())
+
+
+def _tentativas_maximas() -> int:
+    return 1 + _env_int("AI_MAX_RETRIES", MAX_RETRIES_PADRAO)
+
+
+def _deve_repetir(exc: Exception) -> bool:
+    if isinstance(exc, (anthropic.APITimeoutError, anthropic.APIConnectionError)):
+        return True
+    if not isinstance(exc, anthropic.APIStatusError):
+        return False
+    pedido = exc.response.headers.get("x-should-retry")
+    if pedido in ("true", "false"):
+        return pedido == "true"
+    return exc.status_code in STATUS_REPETIVEIS or exc.status_code >= 500
+
+
+def _espera_pedida_s(exc: Exception) -> float | None:
+    if not isinstance(exc, anthropic.APIStatusError):
+        return None
+    cabecalhos = exc.response.headers
+    for nome, divisor in (("retry-after-ms", 1000.0), ("retry-after", 1.0)):
+        try:
+            valor = float(cabecalhos.get(nome, ""))
+        except ValueError:
+            continue
+        if valor > 0:
+            return valor / divisor
+    return None
+
+
+def _espera_antes_de_repetir(exc: Exception, repeticao: int) -> float:
+    pedida = _espera_pedida_s(exc)
+    if pedida is not None:
+        return pedida
+    return min(ESPERA_INICIAL_S * 2**repeticao, ESPERA_MAXIMA_S)
+
+
+def _cabe_nova_tentativa(op: Operacao, espera: float) -> bool:
+    restante = op.restante_s()
+    return restante is None or restante - espera >= _piso_s()
 
 
 _cliente: Any = None
@@ -152,10 +196,7 @@ def cliente() -> Any:
     if _cliente is None:
         with _trava_cliente:
             if _cliente is None:
-                _cliente = anthropic.Anthropic(
-                    max_retries=_env_int("AI_MAX_RETRIES", MAX_RETRIES_PADRAO),
-                    timeout=_teto_s(),
-                )
+                _cliente = anthropic.Anthropic(max_retries=0, timeout=_teto_s())
     return _cliente
 
 
@@ -217,12 +258,28 @@ def _atributos(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any])
 
 
 def _chamar(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any]) -> Any:
-    timeout = timeout_da_chamada(op)
+    maximo = _tentativas_maximas()
+    repeticao = 0
+    while True:
+        timeout = timeout_da_chamada(op)
+        try:
+            return _tentar(requisicao, op, rotulo, timeout)
+        except anthropic.AnthropicError as exc:
+            if repeticao + 1 >= maximo or not _deve_repetir(exc):
+                raise LLMUnavailable(_motivo_falha(exc)) from exc
+            espera = _espera_antes_de_repetir(exc, repeticao)
+            if not _cabe_nova_tentativa(op, espera):
+                raise LLMUnavailable(_motivo_falha(exc)) from exc
+            time.sleep(espera)
+            repeticao += 1
+
+
+def _tentar(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any], timeout: float) -> Any:
     atributos = _atributos(requisicao, op, rotulo)
     inicio_ns = time.time_ns()
     inicio = time.perf_counter()
     try:
-        resposta = cliente().with_options(timeout=timeout).messages.create(**requisicao)
+        resposta = cliente().with_options(timeout=timeout, max_retries=0).messages.create(**requisicao)
     except anthropic.AnthropicError as exc:
         motivo = _motivo_falha(exc)
         logger.warning("chamada ao modelo falhou tipo=%s motivo=%s", type(exc).__name__, motivo)
@@ -234,7 +291,7 @@ def _chamar(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any]) ->
             }
         )
         telemetria.registrar_chamada(atributos, inicio_ns, time.time_ns(), motivo)
-        raise LLMUnavailable(motivo) from exc
+        raise
     usage = getattr(resposta, "usage", None)
     op.uso.somar(usage)
     op.modelo = getattr(resposta, "model", None) or requisicao["model"]

@@ -62,7 +62,7 @@ class ConfiguracaoDoModeloTest(unittest.TestCase):
         for proibido in ("claude-", "openai", "groq", "openrouter", "temperature", "_sem_fence"):
             self.assertNotIn(proibido, fonte)
 
-    def test_cliente_unico_e_reutilizado_com_retry_configurado(self):
+    def test_cliente_unico_e_reutilizado_sem_retry_proprio_do_sdk(self):
         anterior = llm._cliente
         try:
             llm.definir_cliente(None)
@@ -71,7 +71,7 @@ class ConfiguracaoDoModeloTest(unittest.TestCase):
                 segundo = llm.cliente()
             self.assertIs(primeiro, segundo)
             self.assertIsInstance(primeiro, anthropic.Anthropic)
-            self.assertEqual(4, primeiro.max_retries)
+            self.assertEqual(0, primeiro.max_retries)
         finally:
             llm.definir_cliente(anterior)
 
@@ -147,7 +147,7 @@ class ReparoTest(unittest.TestCase):
         self.assertIn("apos reparo", str(ctx.exception))
         self.assertEqual(2, len(cliente.requisicoes))
 
-    def test_erro_de_transporte_fica_com_o_retry_do_sdk(self):
+    def test_erro_de_transporte_sem_retentativa_configurada_falha_na_primeira(self):
         with ComClienteFalso(_erro_status(anthropic.RateLimitError, 429)) as cliente:
             with self.assertRaises(LLMUnavailable) as ctx:
                 _chamar()
@@ -176,15 +176,17 @@ class PrazoTest(unittest.TestCase):
         self.assertLessEqual(cliente.timeouts[0], 20)
         self.assertGreater(cliente.timeouts[0], 19)
 
-    def test_piso_e_teto_limitam_o_timeout(self):
+    def test_teto_limita_o_timeout_e_prazo_abaixo_do_piso_nao_chama(self):
         with patch.dict(os.environ, {"AI_TIMEOUT_PISO_S": "3", "AI_TIMEOUT_TETO_S": "30"}):
-            with ComClienteFalso(resposta(KEYWORDS_OK), resposta(KEYWORDS_OK), resposta(KEYWORDS_OK)) as cliente:
-                with operacao(prazo_ms=500):
-                    _chamar()
+            with ComClienteFalso(resposta(KEYWORDS_OK), resposta(KEYWORDS_OK)) as cliente:
+                with self.assertRaises(PrazoEsgotado):
+                    with operacao(prazo_ms=2500):
+                        _chamar()
                 with operacao(prazo_ms=600000):
                     _chamar()
                 _chamar()
-        self.assertEqual([3.0, 30.0, 30.0], [round(t, 1) for t in cliente.timeouts])
+        self.assertEqual([30.0, 30.0], [round(t, 1) for t in cliente.timeouts])
+        self.assertEqual([0, 0], cliente.max_retries)
 
     def test_prazo_vencido_nao_chama_o_modelo(self):
         with ComClienteFalso() as cliente:
@@ -213,6 +215,151 @@ class PrazoTest(unittest.TestCase):
                 )
         self.assertEqual(200, resposta_http.status_code)
         self.assertLessEqual(cliente.timeouts[0], 8)
+
+
+class RelogioVirtual:
+    def __init__(self):
+        self.agora = 1000.0
+        self.esperas = []
+
+    def monotonic(self):
+        return self.agora
+
+    def sleep(self, segundos):
+        self.esperas.append(segundos)
+        self.agora += segundos
+
+
+def _estouro(relogio):
+    def falhar(timeout):
+        relogio.agora += timeout
+        raise anthropic.APITimeoutError(httpx2.Request("POST", "https://api.anthropic.com"))
+
+    return falhar
+
+
+def _com_retry_after(segundos):
+    requisicao = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    resposta_http = httpx2.Response(429, request=requisicao, headers={"retry-after": str(segundos)})
+    return anthropic.RateLimitError("falha", response=resposta_http, body=None)
+
+
+class ClienteCronometrado:
+    def __init__(self, relogio, *comportamentos):
+        self.relogio = relogio
+        self.comportamentos = list(comportamentos)
+        self.timeouts = []
+        self.max_retries = []
+        self._timeout = None
+        self.messages = self
+
+    def with_options(self, timeout=None, max_retries=None, **_):
+        self._timeout = timeout
+        self.max_retries.append(max_retries)
+        return self
+
+    def create(self, **_):
+        self.timeouts.append(self._timeout)
+        comportamento = self.comportamentos.pop(0) if self.comportamentos else _estouro(self.relogio)
+        if isinstance(comportamento, BaseException):
+            self.relogio.agora += 0.2
+            raise comportamento
+        if callable(comportamento):
+            return comportamento(self._timeout)
+        return comportamento
+
+
+class PrazoTotalDasTentativasTest(unittest.TestCase):
+    def _executar(self, prazo_ms, *comportamentos, retries="2", piso="1"):
+        relogio = RelogioVirtual()
+        cliente = ClienteCronometrado(relogio, *comportamentos)
+        ambiente = {"AI_MAX_RETRIES": retries, "AI_TIMEOUT_PISO_S": piso, "AI_TIMEOUT_TETO_S": "120"}
+        with ComClienteFalso(), patch.dict(os.environ, ambiente), patch(
+            "app.llm.time.monotonic", relogio.monotonic
+        ), patch("app.llm.time.sleep", relogio.sleep):
+            llm.definir_cliente(cliente)
+            inicio = relogio.agora
+            resultado, erro = None, None
+            try:
+                with operacao(prazo_ms=prazo_ms):
+                    resultado = _chamar()
+            except (LLMUnavailable, PrazoEsgotado) as exc:
+                erro = exc
+        return resultado, erro, relogio.agora - inicio, cliente, relogio
+
+    def test_cliente_que_sempre_estoura_fica_dentro_do_prazo(self):
+        for prazo_ms in (1500, 8000, 20000, 60000, 300000):
+            _, erro, gasto, cliente, _ = self._executar(prazo_ms)
+            self.assertIsInstance(erro, LLMUnavailable)
+            self.assertIn("tempo esgotado", str(erro))
+            self.assertLessEqual(gasto, prazo_ms / 1000)
+            self.assertTrue(all(retries == 0 for retries in cliente.max_retries))
+
+    def test_cliente_que_sempre_estoura_com_teto_curto_repete_dentro_do_prazo(self):
+        with patch.dict(os.environ, {"AI_TIMEOUT_TETO_S": "10"}):
+            relogio = RelogioVirtual()
+            cliente = ClienteCronometrado(relogio)
+            ambiente = {"AI_MAX_RETRIES": "5", "AI_TIMEOUT_PISO_S": "1"}
+            with ComClienteFalso(), patch.dict(os.environ, ambiente), patch(
+                "app.llm.time.monotonic", relogio.monotonic
+            ), patch("app.llm.time.sleep", relogio.sleep):
+                llm.definir_cliente(cliente)
+                with self.assertRaises(LLMUnavailable):
+                    with operacao(prazo_ms=25000):
+                        _chamar()
+        self.assertLessEqual(relogio.agora - 1000.0, 25)
+        self.assertEqual(3, len(cliente.timeouts))
+        self.assertEqual([10.0, 10.0], cliente.timeouts[:2])
+
+    def test_falhas_rapidas_repetem_com_espera_ate_o_limite_configurado(self):
+        erro_500 = _erro_status(anthropic.InternalServerError, 500)
+        resultado, erro, gasto, cliente, relogio = self._executar(
+            60000, erro_500, erro_500, resposta(KEYWORDS_OK)
+        )
+        self.assertIsNone(erro)
+        self.assertEqual("Python", resultado.keywords[0].termo)
+        self.assertEqual(3, len(cliente.timeouts))
+        self.assertEqual([0.5, 1.0], relogio.esperas)
+        self.assertLessEqual(gasto, 60)
+
+    def test_retentativas_param_no_maximo_configurado(self):
+        erro_500 = _erro_status(anthropic.InternalServerError, 500)
+        _, erro, _, cliente, _ = self._executar(60000, erro_500, erro_500, erro_500, retries="1")
+        self.assertIsInstance(erro, LLMUnavailable)
+        self.assertEqual(2, len(cliente.timeouts))
+
+    def test_retry_after_maior_que_o_prazo_nao_e_esperado(self):
+        _, erro, gasto, cliente, relogio = self._executar(10000, _com_retry_after(60))
+        self.assertIsInstance(erro, LLMUnavailable)
+        self.assertIn("limite de requisicoes", str(erro))
+        self.assertEqual([], relogio.esperas)
+        self.assertEqual(1, len(cliente.timeouts))
+        self.assertLessEqual(gasto, 10)
+
+    def test_retry_after_que_cabe_e_respeitado_e_a_nova_tentativa_usa_o_restante(self):
+        _, erro, gasto, cliente, relogio = self._executar(10000, _com_retry_after(2), resposta(KEYWORDS_OK))
+        self.assertIsNone(erro)
+        self.assertEqual([2.0], relogio.esperas)
+        self.assertAlmostEqual(10 - 0.2 - 2.0, cliente.timeouts[1], places=3)
+        self.assertLessEqual(gasto, 10)
+
+    def test_nova_tentativa_sem_espaco_para_o_piso_nao_acontece(self):
+        erro_500 = _erro_status(anthropic.InternalServerError, 500)
+        _, erro, _, cliente, relogio = self._executar(1500, erro_500, resposta(KEYWORDS_OK), piso="1.2")
+        self.assertIsInstance(erro, LLMUnavailable)
+        self.assertEqual(1, len(cliente.timeouts))
+        self.assertEqual([], relogio.esperas)
+
+    def test_erro_nao_repetivel_falha_na_primeira(self):
+        _, erro, _, cliente, _ = self._executar(60000, _erro_status(anthropic.AuthenticationError, 401))
+        self.assertIn("credencial", str(erro))
+        self.assertEqual(1, len(cliente.timeouts))
+
+    def test_prazo_abaixo_do_piso_nao_chama(self):
+        _, erro, gasto, cliente, _ = self._executar(800)
+        self.assertIsInstance(erro, PrazoEsgotado)
+        self.assertEqual([], cliente.timeouts)
+        self.assertEqual(0, gasto)
 
 
 if __name__ == "__main__":
