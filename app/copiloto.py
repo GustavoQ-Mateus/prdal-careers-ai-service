@@ -259,7 +259,8 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
 SYSTEM_MENSAGEM = (
     "Voce redige uma mensagem curta e profissional do candidato para o recrutador "
     "da vaga. Use apenas fatos do perfil do candidato. Tom cordial e objetivo, sem "
-    "exageros. O candidato vai revisar e enviar. Responda em JSON."
+    "exageros. O candidato vai revisar e enviar. Responda em JSON no formato "
+    '{"titulo":"...","texto":"...","destino":"..."}, com a mensagem pronta para copiar.'
 )
 
 
@@ -279,9 +280,7 @@ def redigir_mensagem(req: RedigirMensagemRequest) -> RedigirMensagemResponse:
         f"Vaga: {req.vaga.titulo} @ {req.vaga.empresa}\n"
         f"Descricao:\n{req.vaga.descricao}\n\n"
         f"Candidato:\n{_perfil_txt(req.perfil)}\n\n"
-        f"Contexto adicional: {req.contexto}\n\n"
-        'Devolva JSON {"titulo":"...","texto":"...","destino":"..."} com a mensagem '
-        "pronta para copiar."
+        f"Contexto adicional: {req.contexto}"
     )
     res = complete_model(
         SYSTEM_MENSAGEM,
@@ -304,7 +303,9 @@ def _exigir_mensagem(res: MensagemLlm) -> None:
 SYSTEM_FORMULARIO = (
     "Voce redige respostas do candidato para campos de um formulario de "
     "candidatura. Cada resposta e curta, verdadeira ao perfil e alinhada a vaga. O "
-    "candidato revisa antes de usar. Responda em JSON."
+    "candidato revisa antes de usar. Responda em JSON no formato "
+    '{"titulo":"...","respostas":[{"campo":"...","texto":"..."}],"texto":"..."}, '
+    "com uma resposta por campo e um texto consolidado."
 )
 
 
@@ -314,9 +315,7 @@ def redigir_formulario(req: RedigirFormularioRequest) -> RedigirFormularioRespon
         f"Vaga: {req.vaga.titulo} @ {req.vaga.empresa}\n"
         f"Descricao:\n{req.vaga.descricao}\n\n"
         f"Candidato:\n{_perfil_txt(req.perfil)}\n\n"
-        f"Campos do formulario:\n{campos}\n\n"
-        'Devolva JSON {"titulo":"...","respostas":[{"campo":"...","texto":"..."}],'
-        '"texto":"..."} com uma resposta por campo e um texto consolidado.'
+        f"Campos do formulario:\n{campos}"
     )
     res = complete_model(
         SYSTEM_FORMULARIO,

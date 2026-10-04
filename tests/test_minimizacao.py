@@ -59,7 +59,7 @@ class PromptSemContatoTest(unittest.TestCase):
             sistema, usuario = chamada.args[0], chamada.args[1]
             self.assertSemDadoPessoal(sistema, usuario)
             self.assertIn("Pessoa Candidata", usuario)
-            self.assertIn(MARCADOR_CONTATO, usuario)
+            self.assertIn(MARCADOR_CONTATO, sistema)
 
     @patch("app.copiloto.complete_model")
     def test_mensagem_ao_recrutador_sem_contato(self, complete):

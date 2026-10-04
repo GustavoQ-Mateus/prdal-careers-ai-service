@@ -21,18 +21,16 @@ SYSTEM = (
     "(como diversidade, respeito, etica ou inovacao), valor corporativo e frase "
     "de missao/employer branding nunca sao keywords validas. Classifique cada "
     "termo em stack, ferramenta, metodologia, dominio_negocio ou certificacao. "
-    "Cada palavra-chave tem um peso de 0 a 1 conforme a importancia. Responda em JSON."
+    "Cada palavra-chave tem um peso de 0 a 1 conforme a importancia. Responda em JSON.\n\n"
+    "Extraia ate 15 palavras-chave da descricao recebida e devolva JSON no "
+    'formato {"keywords":[{"termo":"...","peso":0.0,"tipo":"stack"}]}. '
+    "Inclua somente termos tecnicos das cinco categorias permitidas. "
+    "Nao inclua paises, valores institucionais, adjetivos de cultura ou frases de missao."
 )
 
 
 def _user(descricao: str) -> str:
-    return (
-        "Extraia ate 15 palavras-chave da descricao abaixo e devolva JSON no "
-        'formato {"keywords":[{"termo":"...","peso":0.0,"tipo":"stack"}]}.\n\n'
-        "Inclua somente termos tecnicos das cinco categorias permitidas. "
-        "Nao inclua paises, valores institucionais, adjetivos de cultura ou frases de missao.\n\n"
-        f"Descricao:\n{descricao}"
-    )
+    return f"Descricao:\n{descricao}"
 
 
 def _normalizar(texto: str) -> str:

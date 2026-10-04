@@ -156,7 +156,7 @@ def montar_requisicao(
     return {
         "model": modelo,
         "max_tokens": max_tokens,
-        "system": [{"type": "text", "text": system}],
+        "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
         "output_config": {
             "effort": esforco,
