@@ -31,7 +31,15 @@ from .generate import (
 from .keywords import extract_keywords
 from . import telemetria
 from .degradacao import Degradacao
-from .llm import LLMUnavailable, Operacao, PrazoEsgotado, exigir_modelo_no_boot, operacao
+from .llm import (
+    LLMUnavailable,
+    Operacao,
+    OperacaoCancelada,
+    PrazoEsgotado,
+    Uso,
+    exigir_modelo_no_boot,
+    operacao,
+)
 from .rag import consultar, indexar, substituir
 from .seguranca import (
     HEADER_SERVICO,
@@ -308,11 +316,15 @@ def copiloto_turn_stream(req: TurnRequest, request: Request) -> StreamingRespons
             emitidos += 1
             fila.put(_linha({"tipo": "delta", "texto": texto}))
 
+        def avisar_uso(uso: Uso) -> None:
+            fila.put(_linha({"tipo": "uso", "uso": UsoLlm(**asdict(uso)).model_dump(by_alias=True)}))
+
         try:
             with operacao(prazo_ms, operacao_id) as op:
-                resposta = _com_uso(planejar_turno_em_stream(req, emitir), op)
+                op.cancelada = cancelado
+                resposta = _com_uso(planejar_turno_em_stream(req, emitir, avisar_uso), op)
                 fila.put(_linha({"tipo": "fim", **resposta.model_dump(by_alias=True)}))
-        except TurnoCancelado as exc:
+        except (TurnoCancelado, OperacaoCancelada) as exc:
             logger.warning("turno em stream cancelado: %s", exc)
         except LLMUnavailable as exc:
             fila.put(_erro_do_stream(registrar(COPILOTO_INDISPONIVEL, exc), op, emitidos > 0))

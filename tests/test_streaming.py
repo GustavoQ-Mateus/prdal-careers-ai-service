@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import threading
 import time
 import unittest
 
@@ -9,7 +10,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.copiloto import SanitizadorDeStream, _nomes_protegidos, _texto_para_candidato, planejar_turno_em_stream
-from app.llm import LLMUnavailable, StreamInterrompido, operacao
+from app.llm import LLMUnavailable, OperacaoCancelada, StreamInterrompido, operacao
 from app.main import app
 from app.schemas import TurnRequest
 from tests.cliente_falso import ComClienteFalso, StreamFalso, resposta_blocos
@@ -147,6 +148,32 @@ class TurnoEmStreamTest(unittest.TestCase):
         self.assertTrue(stream.fechado)
 
 
+class CancelamentoTest(unittest.TestCase):
+    def test_uso_parcial_sai_no_inicio_da_mensagem(self):
+        final = resposta_blocos([{"type": "text", "text": "Oi."}])
+        usos = []
+        with ComClienteFalso(StreamFalso(["Oi."], final, entrada=777, uso_inicial=True)):
+            with operacao():
+                planejar_turno_em_stream(turno(), lambda _t: None, usos.append)
+        self.assertEqual(1, len(usos))
+        self.assertEqual(777, usos[0].entrada)
+        self.assertEqual(1, usos[0].chamadas)
+
+    def test_cancelamento_encerra_o_stream_sem_texto_e_guarda_o_uso(self):
+        cancelado = threading.Event()
+        final = resposta_blocos([{"type": "tool_use", "id": "t1", "name": "ler_perfil", "input": {}}], stop_reason="tool_use")
+        stream = StreamFalso([[], []], final, entrada=432, ao_evento=cancelado.set)
+        with ComClienteFalso(stream, StreamFalso([], final)) as cliente:
+            os.environ["AI_MAX_RETRIES"] = "2"
+            with operacao() as op:
+                op.cancelada = cancelado
+                with self.assertRaises(OperacaoCancelada):
+                    planejar_turno_em_stream(turno(), lambda _t: None)
+        self.assertEqual(1, len(cliente.requisicoes))
+        self.assertTrue(stream.fechado)
+        self.assertEqual(432, op.uso.entrada)
+
+
 class EndpointDeStreamTest(unittest.TestCase):
     def linhas(self, resposta_http):
         return [json.loads(linha) for linha in resposta_http.text.splitlines() if linha.strip()]
@@ -181,6 +208,17 @@ class EndpointDeStreamTest(unittest.TestCase):
         self.assertTrue(linhas[-1]["interrompido"])
         self.assertEqual(50, linhas[-1]["uso"]["entrada"])
         self.assertIn("indisponível", linhas[-1]["detail"])
+
+    def test_endpoint_emite_o_uso_parcial_antes_dos_deltas(self):
+        final = resposta_blocos([{"type": "text", "text": "Oi."}], entrada=640)
+        with ComClienteFalso(StreamFalso(["Oi."], final, entrada=640, uso_inicial=True)):
+            resposta_http = TestClient(app).post(
+                "/copiloto/turn/stream", json={"mensagens": [{"role": "user", "content": [{"type": "text", "text": "oi"}]}]}
+            )
+        linhas = self.linhas(resposta_http)
+        self.assertEqual(["uso", "delta", "fim"], [linha["tipo"] for linha in linhas])
+        self.assertEqual(640, linhas[0]["uso"]["entrada"])
+        self.assertEqual(640, linhas[-1]["uso"]["entrada"])
 
     def test_falha_antes_do_primeiro_delta_nao_e_interrompida(self):
         with ComClienteFalso(falha_de_conexao()):

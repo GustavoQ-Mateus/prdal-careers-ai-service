@@ -39,13 +39,15 @@ def resposta_blocos(blocos, stop_reason="end_turn", entrada=100, saida=20, cache
 
 
 class StreamFalso:
-    def __init__(self, textos, final, falha_apos=None, falha=None, atraso=0.0, entrada=100):
+    def __init__(self, textos, final, falha_apos=None, falha=None, atraso=0.0, entrada=100, uso_inicial=False, ao_evento=None):
         self.textos = list(textos)
         self.final = final
         self.falha_apos = falha_apos
         self.falha = falha
         self.atraso = atraso
         self.entrada = entrada
+        self.uso_inicial = uso_inicial
+        self.ao_evento = ao_evento
         self.instantes = []
         self.fechado = False
         self._snapshot = None
@@ -67,10 +69,12 @@ class StreamFalso:
         self._snapshot = SimpleNamespace(
             usage=SimpleNamespace(input_tokens=self.entrada, output_tokens=0, cache_read_input_tokens=0, cache_creation_input_tokens=0)
         )
-        yield SimpleNamespace(type="message_start")
+        yield SimpleNamespace(type="message_start", message=self._snapshot if self.uso_inicial else None)
         blocos = self.textos if self.textos and isinstance(self.textos[0], list) else [self.textos]
         emitidos = 0
         for bloco in blocos:
+            if self.ao_evento:
+                self.ao_evento()
             yield SimpleNamespace(type="content_block_start", content_block=SimpleNamespace(type="text"))
             for texto in bloco:
                 if self.falha_apos is not None and emitidos >= self.falha_apos:

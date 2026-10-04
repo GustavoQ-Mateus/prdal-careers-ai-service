@@ -5,6 +5,7 @@ from typing import Any
 from .contexto import MARCA_DADO, contador, mensagens_para_api, montar_contexto
 from .llm import (
     LLMUnavailable,
+    Uso,
     ValidacaoSemantica,
     complete_model,
     responder_com_tools,
@@ -113,8 +114,14 @@ def _texto_para_candidato(texto: str, req: TurnRequest | None = None) -> str:
 
 
 class SanitizadorDeStream:
-    def __init__(self, emitir: Callable[[str], None], nomes: list[str]) -> None:
+    def __init__(
+        self,
+        emitir: Callable[[str], None],
+        nomes: list[str],
+        ao_uso: Callable[[Uso], None] | None = None,
+    ) -> None:
         self._emitir = emitir
+        self._ao_uso = ao_uso
         self._padrao = _padrao_detalhe_interno(nomes)
         self._prefixaveis = [*nomes, *_VERBOS_HTTP]
         self.reiniciar()
@@ -136,6 +143,10 @@ class SanitizadorDeStream:
 
     def finalizar(self) -> None:
         self._liberar(len(self._pendente))
+
+    def uso_parcial(self, uso: Uso) -> None:
+        if self._ao_uso:
+            self._ao_uso(uso)
 
     def _corte_seguro(self, texto: str) -> int:
         corte = len(texto)
@@ -190,9 +201,13 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
     return _concluir_turno(req, payload, resumo, blocos, parada, entrada)
 
 
-def planejar_turno_em_stream(req: TurnRequest, emitir: Callable[[str], None]) -> TurnResponse:
+def planejar_turno_em_stream(
+    req: TurnRequest,
+    emitir: Callable[[str], None],
+    ao_uso: Callable[[Uso], None] | None = None,
+) -> TurnResponse:
     payload, resumo = _preparar_turno(req)
-    saida = SanitizadorDeStream(emitir, _nomes_protegidos(req))
+    saida = SanitizadorDeStream(emitir, _nomes_protegidos(req), ao_uso)
     blocos, parada, entrada = responder_com_tools_em_stream(
         SYSTEM_TURNO,
         payload["messages"],

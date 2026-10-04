@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol, TypeVar
 
 import anthropic
@@ -54,6 +54,10 @@ class StreamInterrompido(LLMUnavailable):
     pass
 
 
+class OperacaoCancelada(Exception):
+    pass
+
+
 class SaidaDeStream(Protocol):
     emitiu: bool
 
@@ -62,6 +66,8 @@ class SaidaDeStream(Protocol):
     def novo_bloco_de_texto(self) -> None: ...
 
     def reiniciar(self) -> None: ...
+
+    def uso_parcial(self, uso: "Uso") -> None: ...
 
 
 def _env_float(nome: str, fallback: float) -> float:
@@ -125,6 +131,7 @@ class Operacao:
     modelo: str | None = None
     requisicoes: int = 0
     teto_requisicoes: int | None = None
+    cancelada: threading.Event | None = None
 
     def restante_s(self) -> float | None:
         if self.prazo is None:
@@ -460,6 +467,15 @@ def responder_com_tools(
     return [_bloco_dict(bloco) for bloco in resposta.content], str(resposta.stop_reason), entrada
 
 
+def _avisar_uso_parcial(op: Operacao, evento: Any, saida: SaidaDeStream) -> None:
+    usage = getattr(getattr(evento, "message", None), "usage", None)
+    if usage is None:
+        return
+    parcial = replace(op.uso)
+    parcial.somar(usage)
+    saida.uso_parcial(parcial)
+
+
 def _uso_parcial(stream: Any) -> Any:
     if stream is None:
         return None
@@ -485,7 +501,9 @@ def _tentar_stream(
         with cliente().with_options(timeout=timeout, max_retries=0).messages.stream(**requisicao) as stream:
             blocos_de_texto = 0
             for evento in stream:
-                if evento.type == "content_block_start" and getattr(evento.content_block, "type", None) == "text":
+                if evento.type == "message_start":
+                    _avisar_uso_parcial(op, evento, saida)
+                elif evento.type == "content_block_start" and getattr(evento.content_block, "type", None) == "text":
                     if blocos_de_texto:
                         saida.novo_bloco_de_texto()
                     blocos_de_texto += 1
@@ -494,6 +512,8 @@ def _tentar_stream(
                         atributos["prdal.primeiro_delta_ms"] = round((time.perf_counter() - inicio) * 1000)
                     deltas += 1
                     saida.delta(evento.text)
+                if op.cancelada is not None and op.cancelada.is_set():
+                    raise OperacaoCancelada("a api encerrou a conexao do turno")
                 restante = op.restante_s()
                 if restante is not None and restante <= 0:
                     raise anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
