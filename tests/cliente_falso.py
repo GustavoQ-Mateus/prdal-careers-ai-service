@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import time
 from types import SimpleNamespace
 
 from app import llm
@@ -37,9 +38,67 @@ def resposta_blocos(blocos, stop_reason="end_turn", entrada=100, saida=20, cache
     return base
 
 
+class StreamFalso:
+    def __init__(self, textos, final, falha_apos=None, falha=None, atraso=0.0, entrada=100):
+        self.textos = list(textos)
+        self.final = final
+        self.falha_apos = falha_apos
+        self.falha = falha
+        self.atraso = atraso
+        self.entrada = entrada
+        self.instantes = []
+        self.fechado = False
+        self._snapshot = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.fechado = True
+        return False
+
+    @property
+    def current_message_snapshot(self):
+        if self._snapshot is None:
+            raise AssertionError("sem snapshot")
+        return self._snapshot
+
+    def __iter__(self):
+        self._snapshot = SimpleNamespace(
+            usage=SimpleNamespace(input_tokens=self.entrada, output_tokens=0, cache_read_input_tokens=0, cache_creation_input_tokens=0)
+        )
+        yield SimpleNamespace(type="message_start")
+        blocos = self.textos if self.textos and isinstance(self.textos[0], list) else [self.textos]
+        emitidos = 0
+        for bloco in blocos:
+            yield SimpleNamespace(type="content_block_start", content_block=SimpleNamespace(type="text"))
+            for texto in bloco:
+                if self.falha_apos is not None and emitidos >= self.falha_apos:
+                    raise self.falha
+                time.sleep(self.atraso)
+                self.instantes.append(time.monotonic())
+                emitidos += 1
+                yield SimpleNamespace(type="text", text=texto, snapshot="")
+        if self.falha_apos is not None and emitidos >= self.falha_apos:
+            raise self.falha
+
+    def get_final_message(self):
+        return self.final
+
+
 class _Mensagens:
     def __init__(self, dono):
         self._dono = dono
+
+    def stream(self, **requisicao):
+        self._dono.requisicoes.append(copy.deepcopy(requisicao))
+        self._dono.timeouts.append(self._dono._timeout_atual)
+        if not self._dono.respostas:
+            raise AssertionError("cliente falso sem stream programado")
+        proximo = self._dono.respostas.pop(0)
+        if isinstance(proximo, BaseException):
+            raise proximo
+        return proximo
 
     def create(self, **requisicao):
         self._dono.requisicoes.append(copy.deepcopy(requisicao))

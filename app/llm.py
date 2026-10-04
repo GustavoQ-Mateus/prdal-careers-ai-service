@@ -7,9 +7,10 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 import anthropic
+import httpx
 from pydantic import BaseModel, ValidationError
 
 from . import telemetria
@@ -47,6 +48,20 @@ class ValidacaoSemantica(ValueError):
 
 class ModeloAusente(RuntimeError):
     pass
+
+
+class StreamInterrompido(LLMUnavailable):
+    pass
+
+
+class SaidaDeStream(Protocol):
+    emitiu: bool
+
+    def delta(self, texto: str) -> None: ...
+
+    def novo_bloco_de_texto(self) -> None: ...
+
+    def reiniciar(self) -> None: ...
 
 
 def _env_float(nome: str, fallback: float) -> float:
@@ -436,6 +451,143 @@ def responder_com_tools(
         "prdal.tentativa": 1,
     }
     resposta = _chamar(requisicao, operacao_atual(), rotulo)
+    _parada_aceitavel(resposta)
+    usage = getattr(resposta, "usage", None)
+    entrada = sum(
+        getattr(usage, campo, 0) or 0
+        for campo in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+    )
+    return [_bloco_dict(bloco) for bloco in resposta.content], str(resposta.stop_reason), entrada
+
+
+def _uso_parcial(stream: Any) -> Any:
+    if stream is None:
+        return None
+    try:
+        return stream.current_message_snapshot.usage
+    except Exception:
+        return None
+
+
+def _tentar_stream(
+    requisicao: dict[str, Any],
+    op: Operacao,
+    rotulo: dict[str, Any],
+    timeout: float,
+    saida: SaidaDeStream,
+) -> Any:
+    atributos = {**_atributos(requisicao, op, rotulo), "prdal.streaming": True}
+    inicio_ns = time.time_ns()
+    inicio = time.perf_counter()
+    stream = None
+    deltas = 0
+    try:
+        with cliente().with_options(timeout=timeout, max_retries=0).messages.stream(**requisicao) as stream:
+            blocos_de_texto = 0
+            for evento in stream:
+                if evento.type == "content_block_start" and getattr(evento.content_block, "type", None) == "text":
+                    if blocos_de_texto:
+                        saida.novo_bloco_de_texto()
+                    blocos_de_texto += 1
+                elif evento.type == "text" and evento.text:
+                    if deltas == 0:
+                        atributos["prdal.primeiro_delta_ms"] = round((time.perf_counter() - inicio) * 1000)
+                    deltas += 1
+                    saida.delta(evento.text)
+                restante = op.restante_s()
+                if restante is not None and restante <= 0:
+                    raise anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+            resposta = stream.get_final_message()
+    except Exception as exc:
+        parcial = _uso_parcial(stream)
+        if parcial is not None:
+            op.uso.somar(parcial)
+        motivo = _motivo_falha(exc)
+        logger.warning("stream do modelo falhou tipo=%s motivo=%s deltas=%s", type(exc).__name__, motivo, deltas)
+        atributos.update(
+            {
+                "prdal.resultado": "erro",
+                "error.type": type(exc).__name__,
+                "prdal.deltas": deltas,
+                "prdal.latencia_ms": round((time.perf_counter() - inicio) * 1000),
+            }
+        )
+        telemetria.registrar_chamada(atributos, inicio_ns, time.time_ns(), motivo)
+        raise
+    usage = getattr(resposta, "usage", None)
+    op.uso.somar(usage)
+    op.modelo = getattr(resposta, "model", None) or requisicao["model"]
+    entrada = getattr(usage, "input_tokens", 0) or 0
+    cache_lida = getattr(usage, "cache_read_input_tokens", 0) or 0
+    cache_escrita = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    atributos.update(
+        {
+            "gen_ai.response.model": op.modelo,
+            "gen_ai.response.finish_reasons": (str(resposta.stop_reason),),
+            "gen_ai.usage.input_tokens": entrada + cache_lida + cache_escrita,
+            "gen_ai.usage.output_tokens": getattr(usage, "output_tokens", 0) or 0,
+            "gen_ai.usage.cache_read.input_tokens": cache_lida,
+            "gen_ai.usage.cache_creation.input_tokens": cache_escrita,
+            "prdal.resultado": RESULTADOS_POR_PARADA.get(resposta.stop_reason, "ok"),
+            "prdal.deltas": deltas,
+            "prdal.latencia_ms": round((time.perf_counter() - inicio) * 1000),
+        }
+    )
+    telemetria.registrar_chamada(atributos, inicio_ns, time.time_ns())
+    return resposta
+
+
+def _chamar_em_stream(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any], saida: SaidaDeStream) -> Any:
+    maximo = _tentativas_maximas()
+    repeticao = 0
+    while True:
+        timeout = timeout_da_chamada(op)
+        _contar_requisicao(op)
+        try:
+            return _tentar_stream(requisicao, op, {**rotulo, "prdal.tentativa": repeticao + 1}, timeout, saida)
+        except anthropic.AnthropicError as exc:
+            if saida.emitiu:
+                raise StreamInterrompido(f"resposta interrompida no meio: {_motivo_falha(exc)}") from exc
+            saida.reiniciar()
+            if repeticao + 1 >= maximo or not _deve_repetir(exc):
+                raise LLMUnavailable(_motivo_falha(exc)) from exc
+            espera = _espera_antes_de_repetir(exc, repeticao)
+            if not _cabe_nova_tentativa(op, espera):
+                raise LLMUnavailable(_motivo_falha(exc)) from exc
+            time.sleep(espera)
+            repeticao += 1
+
+
+def responder_com_tools_em_stream(
+    system: str,
+    mensagens: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    saida: SaidaDeStream,
+    *,
+    chamador: str,
+    esforco: str,
+    max_tokens: int | None = None,
+) -> tuple[list[dict[str, Any]], str, int]:
+    if esforco not in ESFORCOS:
+        raise ValueError(f"esforco invalido: {esforco}")
+    modelo = modelo_configurado()
+    if not modelo:
+        raise LLMUnavailable("AI_MODEL ausente")
+    if not _credencial_presente():
+        raise LLMUnavailable("ANTHROPIC_API_KEY ausente")
+    requisicao = montar_requisicao_com_tools(
+        modelo,
+        system,
+        mensagens,
+        tools,
+        esforco,
+        max_tokens or _env_int("AI_MAX_TOKENS", MAX_TOKENS_PADRAO),
+    )
+    rotulo = {
+        "prdal.chamador": chamador,
+        "prdal.prompt_version": versao_do_prompt(chamador, system),
+    }
+    resposta = _chamar_em_stream(requisicao, operacao_atual(), rotulo, saida)
     _parada_aceitavel(resposta)
     usage = getattr(resposta, "usage", None)
     entrada = sum(

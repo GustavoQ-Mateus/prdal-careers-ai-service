@@ -1,16 +1,20 @@
+import contextvars
+import json
 import logging
 import os
+import queue
+import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .carregador_prompts import carregar_prompts
 from .classify import classificar, taxonomia
-from .copiloto import planejar_turno, redigir_formulario, redigir_mensagem
+from .copiloto import planejar_turno, planejar_turno_em_stream, redigir_formulario, redigir_mensagem
 from .degradacao import (
     COPILOTO_INDISPONIVEL,
     KEYWORDS_INDISPONIVEIS,
@@ -264,6 +268,73 @@ def copiloto_turn(req: TurnRequest, request: Request) -> TurnResponse:
             return _com_uso(planejar_turno(req), op)
         except LLMUnavailable as exc:
             return _indisponivel(COPILOTO_INDISPONIVEL, exc, op)
+
+
+class TurnoCancelado(Exception):
+    pass
+
+
+def _linha(dados: dict) -> str:
+    return json.dumps(dados, ensure_ascii=False) + "\n"
+
+
+def _erro_do_stream(detalhe: str, op: Operacao | None, emitiu: bool) -> str:
+    return _linha(
+        {
+            "tipo": "erro",
+            "detail": detalhe,
+            "interrompido": emitiu,
+            "uso": _uso(op).model_dump(by_alias=True) if op else UsoLlm().model_dump(by_alias=True),
+            "modelo": op.modelo if op else None,
+        }
+    )
+
+
+@app.post("/copiloto/turn/stream")
+def copiloto_turn_stream(req: TurnRequest, request: Request) -> StreamingResponse:
+    prazo_ms = _prazo_ms(request.headers.get(HEADER_PRAZO))
+    operacao_id = request.headers.get(HEADER_OPERACAO)
+    fila: queue.Queue[str | None] = queue.Queue()
+    cancelado = threading.Event()
+
+    def trabalhar() -> None:
+        op: Operacao | None = None
+        emitidos = 0
+
+        def emitir(texto: str) -> None:
+            nonlocal emitidos
+            if cancelado.is_set():
+                raise TurnoCancelado("a api encerrou a conexao do turno")
+            emitidos += 1
+            fila.put(_linha({"tipo": "delta", "texto": texto}))
+
+        try:
+            with operacao(prazo_ms, operacao_id) as op:
+                resposta = _com_uso(planejar_turno_em_stream(req, emitir), op)
+                fila.put(_linha({"tipo": "fim", **resposta.model_dump(by_alias=True)}))
+        except TurnoCancelado as exc:
+            logger.warning("turno em stream cancelado: %s", exc)
+        except LLMUnavailable as exc:
+            fila.put(_erro_do_stream(registrar(COPILOTO_INDISPONIVEL, exc), op, emitidos > 0))
+        except PrazoEsgotado as exc:
+            logger.warning("turno em stream recusado por prazo: %s", exc)
+            fila.put(_erro_do_stream("prazo da operacao esgotado", op, emitidos > 0))
+        except Exception as exc:
+            logger.exception("turno em stream falhou")
+            fila.put(_erro_do_stream(registrar(COPILOTO_INDISPONIVEL, exc), op, emitidos > 0))
+        finally:
+            fila.put(None)
+
+    threading.Thread(target=contextvars.copy_context().run, args=(trabalhar,), daemon=True).start()
+
+    def corpo():
+        try:
+            while (linha := fila.get()) is not None:
+                yield linha
+        finally:
+            cancelado.set()
+
+    return StreamingResponse(corpo(), media_type="application/x-ndjson")
 
 
 @app.post("/copiloto/redigir-mensagem", response_model=RedigirMensagemResponse)

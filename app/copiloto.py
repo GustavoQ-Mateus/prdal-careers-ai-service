@@ -1,8 +1,15 @@
 import re
+from collections.abc import Callable
 from typing import Any
 
 from .contexto import MARCA_DADO, contador, mensagens_para_api, montar_contexto
-from .llm import LLMUnavailable, ValidacaoSemantica, complete_model, responder_com_tools
+from .llm import (
+    LLMUnavailable,
+    ValidacaoSemantica,
+    complete_model,
+    responder_com_tools,
+    responder_com_tools_em_stream,
+)
 from .schemas import (
     FormularioLlm,
     MensagemLlm,
@@ -55,34 +62,124 @@ SYSTEM_TURNO = (
 )
 
 _FERRAMENTAS_INTERNAS = (
-    "listar_oportunidades|buscar_oportunidade|abrir_workspace|ler_timeline|"
-    "listar_acoes|ler_perfil|listar_curriculos|buscar_curriculo|status_geracao|analisar_ats|"
-    "listar_banco_vagas|ler_agenda|registrar_oportunidade|ativar_entrada|"
-    "ativar_banco_vaga|gerar_curriculo|editar_curriculo|definir_proximo_passo|"
-    "concluir_passo|mover_estagio|registrar_candidatura|atualizar_candidatura|"
-    "registrar_nota|redigir_mensagem_recrutador|redigir_respostas_formulario"
+    "listar_oportunidades",
+    "buscar_oportunidade",
+    "abrir_workspace",
+    "ler_timeline",
+    "listar_acoes",
+    "ler_perfil",
+    "listar_curriculos",
+    "buscar_curriculo",
+    "status_geracao",
+    "analisar_ats",
+    "listar_banco_vagas",
+    "ler_agenda",
+    "registrar_oportunidade",
+    "ativar_entrada",
+    "ativar_banco_vaga",
+    "gerar_curriculo",
+    "editar_curriculo",
+    "definir_proximo_passo",
+    "concluir_passo",
+    "mover_estagio",
+    "registrar_candidatura",
+    "atualizar_candidatura",
+    "registrar_nota",
+    "redigir_mensagem_recrutador",
+    "redigir_respostas_formulario",
 )
-_DETALHE_INTERNO = re.compile(
-    rf"\b(?:{_FERRAMENTAS_INTERNAS})\b|\b(?:GET|POST|PUT|PATCH|DELETE)\s+/\S+",
-)
+_VERBOS_HTTP = ("GET", "POST", "PUT", "PATCH", "DELETE")
+_SUBSTITUTO = "esta acao"
+_CONTEXTO_ESQUERDO = 64
+_PALAVRA_NO_FIM = re.compile(r"\w*$")
+_VERBO_ABERTO_NO_FIM = re.compile(rf"\b(?:{'|'.join(_VERBOS_HTTP)})\s+(?:/\S*)?$")
+
+
+def _nomes_protegidos(req: TurnRequest | None) -> list[str]:
+    nomes = list(_FERRAMENTAS_INTERNAS)
+    for tool in req.tools if req else []:
+        if tool.name not in nomes:
+            nomes.append(tool.name)
+    return nomes
+
+
+def _padrao_detalhe_interno(nomes: list[str]) -> re.Pattern[str]:
+    alternativas = "|".join(re.escape(nome) for nome in sorted(nomes, key=len, reverse=True))
+    return re.compile(rf"\b(?:{alternativas})\b|\b(?:{'|'.join(_VERBOS_HTTP)})\s+/\S+")
 
 
 def _texto_para_candidato(texto: str, req: TurnRequest | None = None) -> str:
-    protegido = _DETALHE_INTERNO.sub("esta acao", texto)
-    if req:
-        nomes = [re.escape(tool.name) for tool in req.tools]
-        if nomes:
-            protegido = re.sub(rf"\b(?:{'|'.join(nomes)})\b", "esta acao", protegido)
-    return protegido
+    return _padrao_detalhe_interno(_nomes_protegidos(req)).sub(_SUBSTITUTO, texto)
+
+
+class SanitizadorDeStream:
+    def __init__(self, emitir: Callable[[str], None], nomes: list[str]) -> None:
+        self._emitir = emitir
+        self._padrao = _padrao_detalhe_interno(nomes)
+        self._prefixaveis = [*nomes, *_VERBOS_HTTP]
+        self.reiniciar()
+
+    def reiniciar(self) -> None:
+        self._pendente = ""
+        self._emitido = ""
+        self.emitiu = False
+
+    def delta(self, texto: str) -> None:
+        self._pendente += texto
+        self._liberar(self._corte_seguro(self._pendente))
+
+    def novo_bloco_de_texto(self) -> None:
+        self.finalizar()
+        if self._emitido:
+            self._pendente = "\n\n"
+            self._liberar(len(self._pendente))
+
+    def finalizar(self) -> None:
+        self._liberar(len(self._pendente))
+
+    def _corte_seguro(self, texto: str) -> int:
+        corte = len(texto)
+        palavra = _PALAVRA_NO_FIM.search(texto)
+        if palavra and palavra.group() and any(nome.startswith(palavra.group()) for nome in self._prefixaveis):
+            corte = palavra.start()
+        verbo = _VERBO_ABERTO_NO_FIM.search(texto)
+        if verbo:
+            corte = min(corte, verbo.start())
+        return corte
+
+    def _liberar(self, corte: int) -> None:
+        segmento, self._pendente = self._pendente[:corte], self._pendente[corte:]
+        if not segmento:
+            return
+        contexto = self._emitido[-_CONTEXTO_ESQUERDO:]
+        alvo = contexto + segmento
+        partes: list[str] = []
+        posicao = len(contexto)
+        for achado in self._padrao.finditer(alvo):
+            if achado.start() < len(contexto):
+                continue
+            partes.append(alvo[posicao : achado.start()])
+            partes.append(_SUBSTITUTO)
+            posicao = achado.end()
+        partes.append(alvo[posicao:])
+        limpo = "".join(partes)
+        self._emitido = (self._emitido + segmento)[-_CONTEXTO_ESQUERDO:]
+        if limpo:
+            self.emitiu = True
+            self._emitir(limpo)
 
 
 def tools_para_api(req: TurnRequest) -> list[dict[str, Any]]:
     return [tool.model_dump(exclude_none=True) for tool in req.tools]
 
 
-def planejar_turno(req: TurnRequest) -> TurnResponse:
+def _preparar_turno(req: TurnRequest) -> tuple[dict[str, Any], Any]:
     system = [{"type": "text", "text": SYSTEM_TURNO, "cache_control": {"type": "ephemeral"}}]
-    payload, resumo = montar_contexto(req, system, tools_para_api(req))
+    return montar_contexto(req, system, tools_para_api(req))
+
+
+def planejar_turno(req: TurnRequest) -> TurnResponse:
+    payload, resumo = _preparar_turno(req)
     blocos, parada, entrada = responder_com_tools(
         SYSTEM_TURNO,
         payload["messages"],
@@ -90,6 +187,32 @@ def planejar_turno(req: TurnRequest) -> TurnResponse:
         chamador="copiloto_turno",
         esforco=ESFORCO_TURNO,
     )
+    return _concluir_turno(req, payload, resumo, blocos, parada, entrada)
+
+
+def planejar_turno_em_stream(req: TurnRequest, emitir: Callable[[str], None]) -> TurnResponse:
+    payload, resumo = _preparar_turno(req)
+    saida = SanitizadorDeStream(emitir, _nomes_protegidos(req))
+    blocos, parada, entrada = responder_com_tools_em_stream(
+        SYSTEM_TURNO,
+        payload["messages"],
+        payload["tools"],
+        saida,
+        chamador="copiloto_turno",
+        esforco=ESFORCO_TURNO,
+    )
+    saida.finalizar()
+    return _concluir_turno(req, payload, resumo, blocos, parada, entrada)
+
+
+def _concluir_turno(
+    req: TurnRequest,
+    payload: dict[str, Any],
+    resumo: Any,
+    blocos: list[dict[str, Any]],
+    parada: str,
+    entrada: int,
+) -> TurnResponse:
     contador.calibrar(payload, entrada)
     conteudo: list[dict[str, Any]] = []
     for bloco in blocos:
