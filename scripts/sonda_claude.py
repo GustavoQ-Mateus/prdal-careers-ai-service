@@ -11,7 +11,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import llm
 from app.contexto import contador
-from app.copiloto import SYSTEM_TURNO, planejar_turno, redigir_formulario, redigir_mensagem
+from app.copiloto import (
+    SYSTEM_TURNO,
+    planejar_turno,
+    planejar_turno_em_stream,
+    redigir_formulario,
+    redigir_mensagem,
+)
 from app.generate import generate_cv_pipeline
 from app.keywords import extract_keywords
 from app.llm import LLMUnavailable, operacao
@@ -25,6 +31,11 @@ from app.schemas import (
 RODADAS = 2
 CHAMADOR_GERACAO = "reescrita"
 CHAMADOR_NATIVO = "turno_nativo"
+CHAMADOR_STREAM = "turno_stream"
+PEDIDO_STREAM = (
+    "Sem usar ferramentas, explique em cinco frases curtas como preparar uma candidatura "
+    "para uma vaga de backend: analise da vaga, ajuste do curriculo e proximos passos."
+)
 PEDIDO_NATIVO = "Abra os detalhes da oportunidade em foco e me diga o titulo e a empresa."
 OPORTUNIDADE_NATIVA = {
     "id": "op-exemplo",
@@ -155,6 +166,9 @@ class _Mensagens:
         resposta = self._alvo.messages.create(**requisicao)
         self._gravador.chamadas.append((resposta, (time.perf_counter() - inicio) * 1000))
         return resposta
+
+    def stream(self, **requisicao: Any) -> Any:
+        return self._alvo.messages.stream(**requisicao)
 
     def count_tokens(self, **payload: Any) -> Any:
         return self._alvo.messages.count_tokens(**payload)
@@ -318,6 +332,38 @@ def _turno_nativo(gravador: Gravador) -> bool:
     return validos and bool(texto) and segundo.parada == "end_turn"
 
 
+def _turno_em_stream() -> bool:
+    deltas: list[tuple[float, str]] = []
+    turno = TurnRequest.model_validate(
+        {
+            "oportunidadeId": "op-exemplo",
+            "mensagens": [{"role": "user", "content": [{"type": "text", "text": PEDIDO_STREAM}]}],
+            "tools": TOOLS_SONDA,
+        }
+    )
+    inicio = time.perf_counter()
+    with operacao(operacao_id=f"sonda:{CHAMADOR_STREAM}") as op:
+        try:
+            resposta = planejar_turno_em_stream(turno, lambda texto: deltas.append((time.perf_counter(), texto)))
+        except LLMUnavailable as exc:
+            print(f"{CHAMADOR_STREAM:<20} validou=nao deltas={len(deltas)} ({exc})")
+            return False
+    total_ms = (time.perf_counter() - inicio) * 1000
+    primeiro_ms = (deltas[0][0] - inicio) * 1000 if deltas else None
+    final = "\n\n".join(bloco.get("text", "") for bloco in resposta.conteudo if bloco.get("type") == "text")
+    transmitido = "".join(texto for _, texto in deltas)
+    igual = transmitido.strip() == final.strip()
+    antes_do_fim = primeiro_ms is not None and primeiro_ms < total_ms
+    primeiro = f"{primeiro_ms:.0f}" if primeiro_ms is not None else "nenhum"
+    print(
+        f"{CHAMADOR_STREAM:<20} primeiro_delta_ms={primeiro} total_ms={total_ms:.0f} "
+        f"deltas={len(deltas)} parada={resposta.parada} texto_igual_ao_final={'sim' if igual else 'nao'} "
+        f"entrada={op.uso.entrada} saida={op.uso.saida} cache_escrita={op.uso.cache_escrita} "
+        f"cache_lida={op.uso.cache_lida} validou={'sim' if igual and antes_do_fim else 'nao'}"
+    )
+    return igual and antes_do_fim
+
+
 def _contagem() -> None:
     contador.reiniciar()
     payload = {
@@ -364,6 +410,8 @@ def main() -> int:
             if chamador == CHAMADOR_GERACAO:
                 _resumo_geracao(rodada, op, captura, resultado, list(gravador.chamadas))
     if not _turno_nativo(gravador):
+        falhas += 1
+    if not _turno_em_stream():
         falhas += 1
     _contagem()
     return 1 if falhas else 0

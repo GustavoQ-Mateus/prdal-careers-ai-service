@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from app import llm
 from scripts import sonda_claude
-from tests.cliente_falso import resposta, resposta_blocos
+from tests.cliente_falso import StreamFalso, resposta, resposta_blocos
 
 REPARO = {
     "titulo": {"texto": "", "fontes": []},
@@ -59,6 +59,11 @@ class _Mensagens:
         conteudo = REPARO if titulo == "ReescritaEstruturada" and vezes % 2 == 0 else RESPOSTAS_POR_SCHEMA[titulo]
         return resposta(conteudo, cache_lida=lida, cache_escrita=0 if lida else 1500)
 
+
+    def stream(self, **requisicao):
+        self.dono.titulos.append("stream")
+        final = resposta_blocos([{"type": "text", "text": "Analise a vaga. Ajuste o curriculo."}], cache_lida=1500, saida=12)
+        return StreamFalso(["Analise a ", "vaga. Ajuste ", "o curriculo."], final, atraso=0.01)
 
     def count_tokens(self, **_):
         return self.dono.contar()
@@ -127,6 +132,9 @@ class SondaTest(unittest.TestCase):
         self.assertIn("cache_lida_no_segundo_passo=sim", passo2)
         contagem = next(linha for linha in linhas if linha.startswith("contagem_tokens"))
         self.assertIn("via=api tokens=2345", contagem)
+        stream = next(linha for linha in linhas if linha.startswith("turno_stream"))
+        for campo in ("primeiro_delta_ms=", "total_ms=", "deltas=3", "texto_igual_ao_final=sim", "cache_lida=1500", "validou=sim"):
+            self.assertIn(campo, stream)
 
     def test_contagem_sem_endpoint_no_canal_mostra_estimativa(self):
         class SemContagem(ClientePorSchema):
