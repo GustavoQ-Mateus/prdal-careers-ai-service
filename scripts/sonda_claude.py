@@ -10,7 +10,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import llm
-from app.copiloto import planejar_turno, redigir_formulario, redigir_mensagem
+from app.contexto import contador
+from app.copiloto import SYSTEM_TURNO, planejar_turno, redigir_formulario, redigir_mensagem
 from app.generate import generate_cv_pipeline
 from app.keywords import extract_keywords
 from app.llm import LLMUnavailable, operacao
@@ -23,6 +24,14 @@ from app.schemas import (
 
 RODADAS = 2
 CHAMADOR_GERACAO = "reescrita"
+CHAMADOR_NATIVO = "turno_nativo"
+PEDIDO_NATIVO = "Abra os detalhes da oportunidade em foco e me diga o titulo e a empresa."
+OPORTUNIDADE_NATIVA = {
+    "id": "op-exemplo",
+    "titulo": "Desenvolvedor Backend Pleno",
+    "empresa": "Empresa Exemplo",
+    "descricao": "APIs REST em Python com FastAPI e PostgreSQL.",
+}
 
 VAGA = {
     "titulo": "Desenvolvedor Backend Pleno",
@@ -147,6 +156,9 @@ class _Mensagens:
         self._gravador.chamadas.append((resposta, (time.perf_counter() - inicio) * 1000))
         return resposta
 
+    def count_tokens(self, **payload: Any) -> Any:
+        return self._alvo.messages.count_tokens(**payload)
+
 
 class _ComOpcoes:
     def __init__(self, gravador: "Gravador", alvo: Any):
@@ -237,6 +249,88 @@ def _resumo_geracao(rodada: int, op: Any, captura: Captura, resultado: Any, cham
         print(resultado.markdown)
 
 
+def _args_validos(args: Any, schema: dict[str, Any]) -> bool:
+    if not isinstance(args, dict):
+        return False
+    propriedades = schema.get("properties", {})
+    if any(chave not in propriedades for chave in args):
+        return False
+    if any(chave not in args for chave in schema.get("required", [])):
+        return False
+    return all(isinstance(valor, str) for chave, valor in args.items() if propriedades[chave].get("type") == "string")
+
+
+def _uso(resposta: Any) -> str:
+    usage = resposta.usage
+    return (
+        f"entrada={usage.input_tokens} saida={usage.output_tokens} "
+        f"cache_escrita={usage.cache_creation_input_tokens or 0} cache_lida={usage.cache_read_input_tokens or 0}"
+    )
+
+
+def _turno_nativo(gravador: Gravador) -> bool:
+    mensagens: list[dict[str, Any]] = [{"role": "user", "content": [{"type": "text", "text": PEDIDO_NATIVO}]}]
+    gravador.chamadas.clear()
+    with operacao(operacao_id=f"sonda:{CHAMADOR_NATIVO}"):
+        try:
+            primeiro = planejar_turno(
+                TurnRequest.model_validate({"oportunidadeId": "op-exemplo", "mensagens": mensagens, "tools": TOOLS_SONDA})
+            )
+        except LLMUnavailable as exc:
+            print(f"{CHAMADOR_NATIVO:<20} passo=1 validou=nao ({exc})")
+            return False
+        usos = [bloco for bloco in primeiro.conteudo if bloco.get("type") == "tool_use"]
+        resposta1 = gravador.chamadas[-1][0] if gravador.chamadas else None
+        if not usos:
+            print(f"{CHAMADOR_NATIVO:<20} passo=1 parada={primeiro.parada} sem tool_use validou=nao")
+            return False
+        uso = usos[0]
+        schema = next(t["input_schema"] for t in TOOLS_SONDA if t["name"] == uso["name"])
+        validos = _args_validos(uso.get("input"), schema)
+        print(
+            f"{CHAMADOR_NATIVO:<20} passo=1 parada={primeiro.parada} tool={uso['name']} "
+            f"args={json.dumps(uso.get('input'), ensure_ascii=False)} args_validos={'sim' if validos else 'nao'} "
+            f"{_uso(resposta1) if resposta1 else ''}"
+        )
+        mensagens += [
+            {"role": "assistant", "content": primeiro.conteudo},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": uso["id"], "content": json.dumps(OPORTUNIDADE_NATIVA, ensure_ascii=False)}
+                ],
+            },
+        ]
+        try:
+            segundo = planejar_turno(
+                TurnRequest.model_validate({"oportunidadeId": "op-exemplo", "mensagens": mensagens, "tools": TOOLS_SONDA})
+            )
+        except LLMUnavailable as exc:
+            print(f"{CHAMADOR_NATIVO:<20} passo=2 validou=nao ({exc})")
+            return False
+    texto = " ".join(bloco.get("text", "") for bloco in segundo.conteudo if bloco.get("type") == "text").strip()
+    resposta2 = gravador.chamadas[-1][0]
+    lida = resposta2.usage.cache_read_input_tokens or 0
+    print(
+        f"{CHAMADOR_NATIVO:<20} passo=2 parada={segundo.parada} texto={json.dumps(texto[:160], ensure_ascii=False)} "
+        f"{_uso(resposta2)} cache_lida_no_segundo_passo={'sim' if lida > 0 else 'nao'}"
+    )
+    return validos and bool(texto) and segundo.parada == "end_turn"
+
+
+def _contagem() -> None:
+    contador.reiniciar()
+    payload = {
+        "system": [{"type": "text", "text": SYSTEM_TURNO}],
+        "tools": TOOLS_SONDA,
+        "messages": [{"role": "user", "content": [{"type": "text", "text": PEDIDO_NATIVO}]}],
+    }
+    estimativa = contador.estimar(payload)
+    tokens = contador.contar(payload)
+    via = "estimativa" if contador.api_indisponivel or os.getenv("AI_CONTAGEM_TOKENS", "api") == "estimativa" else "api"
+    print(f"contagem_tokens      via={via} tokens={tokens} estimativa_sem_calibrar={estimativa} fator={contador.fator:.2f}")
+
+
 def main() -> int:
     if not os.getenv("ANTHROPIC_API_KEY", "").strip():
         print("ANTHROPIC_API_KEY ausente: defina a chave da Anthropic para rodar a sonda ao vivo.", file=sys.stderr)
@@ -269,6 +363,9 @@ def main() -> int:
             _imprimir(chamador, rodada, validou, list(gravador.chamadas))
             if chamador == CHAMADOR_GERACAO:
                 _resumo_geracao(rodada, op, captura, resultado, list(gravador.chamadas))
+    if not _turno_nativo(gravador):
+        falhas += 1
+    _contagem()
     return 1 if falhas else 0
 
 

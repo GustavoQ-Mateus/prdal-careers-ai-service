@@ -2,6 +2,7 @@ import contextlib
 import io
 import os
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from app import llm
@@ -43,6 +44,11 @@ class _Mensagens:
         if "tools" in requisicao:
             self.dono.titulos.append("turno")
             lida = 1500 if self.dono.titulos.count("turno") > 1 else 0
+            ultima = requisicao["messages"][-1]["content"]
+            pedido = " ".join(bloco.get("text", "") for bloco in ultima)
+            if sonda_claude.PEDIDO_NATIVO in pedido and not any(b["type"] == "tool_result" for b in ultima):
+                blocos = [{"type": "tool_use", "id": "toolu_sonda", "name": "buscar_oportunidade", "input": {"oportunidadeId": "op-exemplo"}}]
+                return resposta_blocos(blocos, stop_reason="tool_use", cache_lida=lida, cache_escrita=0 if lida else 1500)
             return resposta_blocos(
                 [{"type": "text", "text": "Vamos revisar a vaga."}], cache_lida=lida, cache_escrita=0 if lida else 1500
             )
@@ -54,6 +60,10 @@ class _Mensagens:
         return resposta(conteudo, cache_lida=lida, cache_escrita=0 if lida else 1500)
 
 
+    def count_tokens(self, **_):
+        return self.dono.contar()
+
+
 class ClientePorSchema:
     def __init__(self):
         self.titulos = []
@@ -61,6 +71,9 @@ class ClientePorSchema:
 
     def with_options(self, **_):
         return self
+
+    def contar(self):
+        return SimpleNamespace(input_tokens=2345)
 
 
 class SondaTest(unittest.TestCase):
@@ -106,6 +119,31 @@ class SondaTest(unittest.TestCase):
         self.assertIn("reparadas=1", resumo)
         self.assertTrue(any("fonte de apoio nao sustenta fato: nota-planos" in linha for linha in linhas))
         self.assertTrue(any(linha.startswith("# Pessoa Exemplo") for linha in linhas))
+        passo1 = next(linha for linha in linhas if linha.startswith("turno_nativo") and "passo=1" in linha)
+        passo2 = next(linha for linha in linhas if linha.startswith("turno_nativo") and "passo=2" in linha)
+        self.assertIn("parada=tool_use tool=buscar_oportunidade", passo1)
+        self.assertIn('args={"oportunidadeId": "op-exemplo"} args_validos=sim', passo1)
+        self.assertIn("parada=end_turn", passo2)
+        self.assertIn("cache_lida_no_segundo_passo=sim", passo2)
+        contagem = next(linha for linha in linhas if linha.startswith("contagem_tokens"))
+        self.assertIn("via=api tokens=2345", contagem)
+
+    def test_contagem_sem_endpoint_no_canal_mostra_estimativa(self):
+        class SemContagem(ClientePorSchema):
+            def contar(self):
+                raise AttributeError("count_tokens")
+
+        anterior = llm._cliente
+        llm.definir_cliente(SemContagem())
+        saida = io.StringIO()
+        try:
+            with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-teste", "AI_MODEL": "claude-sonnet-5"}):
+                with contextlib.redirect_stdout(saida):
+                    sonda_claude.main()
+        finally:
+            llm.definir_cliente(anterior)
+        contagem = next(linha for linha in saida.getvalue().splitlines() if linha.startswith("contagem_tokens"))
+        self.assertIn("via=estimativa", contagem)
 
 
 if __name__ == "__main__":
