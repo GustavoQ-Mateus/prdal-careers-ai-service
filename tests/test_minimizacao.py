@@ -2,10 +2,12 @@ import unittest
 from unittest.mock import patch
 
 from app.copiloto import redigir_formulario, redigir_mensagem
-from app.generate import MARCADOR_CONTATO, _limpar_markdown, generate_cv_pipeline
+from app.generate import generate_cv_pipeline
+from app.llm import LLMUnavailable
 from app.schemas import (
+    FraseFonte,
     GenerateCvRequest,
-    GenerateCvResponse,
+    ReescritaEstruturada,
     RedigirFormularioRequest,
     RedigirFormularioResponse,
     RedigirMensagemRequest,
@@ -52,16 +54,19 @@ class PromptSemContatoTest(unittest.TestCase):
 
     @patch("app.generate.complete_model")
     def test_geracao_envia_perfil_sem_contato(self, complete):
-        complete.return_value = GenerateCvResponse(
-            markdown=f"# Pessoa Candidata\n**Desenvolvedora Python**\n{MARCADOR_CONTATO}\n\n## RESUMO\nTexto."
+        complete.return_value = ReescritaEstruturada(
+            titulo=FraseFonte(texto="Desenvolvedora Back-end", fontes=["experiencia-1"]),
+            resumo=[FraseFonte(texto="Desenvolvedora back-end com APIs REST em Python.", fontes=["resumo"])],
+            experiencias=[],
+            competencias=[],
+            reparos=[],
         )
         generate_cv_pipeline(_req())
-        self.assertGreater(complete.call_count, 0)
+        self.assertEqual(1, complete.call_count)
         for chamada in complete.call_args_list:
             sistema, usuario = chamada.args[0], chamada.args[1]
             self.assertSemDadoPessoal(sistema, usuario)
-            self.assertIn("Pessoa Candidata", usuario)
-            self.assertIn(MARCADOR_CONTATO, sistema)
+            self.assertIn("Desenvolvi APIs REST com Python e FastAPI em producao.", usuario)
 
     @patch("app.copiloto.complete_model")
     def test_mensagem_ao_recrutador_sem_contato(self, complete):
@@ -84,33 +89,26 @@ class PromptSemContatoTest(unittest.TestCase):
 
 
 class ContatoMontadoPorCodigoTest(unittest.TestCase):
-    def test_marcador_vira_linha_de_contato_do_perfil(self):
-        markdown = _limpar_markdown(
-            f"# Pessoa Candidata\n**Desenvolvedora Python**\n{MARCADOR_CONTATO}\n\n## RESUMO\nTexto.", _req()
-        )
-        linhas = [linha for linha in markdown.splitlines() if linha.strip()]
+    def _linhas(self, req):
+        with patch("app.generate.complete_model", side_effect=LLMUnavailable("offline")):
+            markdown = generate_cv_pipeline(req).markdown
+        return [linha for linha in markdown.splitlines() if linha.strip()]
+
+    def test_linha_de_contato_vem_do_perfil_e_so_com_os_principais(self):
+        linhas = self._linhas(_req())
         self.assertIn(EMAIL, linhas[2])
         self.assertIn(TELEFONE, linhas[2])
         self.assertIn("Fortaleza - CE", linhas[2])
         self.assertNotIn("outro@exemplo.dev", linhas[2])
-        self.assertNotIn(MARCADOR_CONTATO, markdown)
 
-    def test_contato_omitido_pelo_modelo_e_inserido(self):
-        markdown = _limpar_markdown("# Pessoa Candidata\n**Desenvolvedora Python**\n\n## RESUMO\nTexto.", _req())
-        linhas = [linha for linha in markdown.splitlines() if linha.strip()]
-        self.assertIn(EMAIL, linhas[2])
-        self.assertTrue(linhas[3].startswith("## "))
-
-    def test_sem_contato_no_perfil_o_marcador_some(self):
+    def test_sem_contato_no_perfil_nao_ha_linha_de_contato(self):
         req = _req()
         req.perfil_mestre.emails = []
         req.perfil_mestre.telefones = []
         req.perfil_mestre.links = []
         req.perfil_mestre.endereco = None
-        markdown = _limpar_markdown(
-            f"# Pessoa Candidata\n**Desenvolvedora Python**\n{MARCADOR_CONTATO}\n\n## RESUMO\nTexto.", req
-        )
-        self.assertNotIn(MARCADOR_CONTATO, markdown)
+        linhas = self._linhas(req)
+        self.assertTrue(linhas[2].startswith("## "))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,16 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
+from .orcamento import (
+    DESCRICAO_BULLETS,
+    DESCRICAO_COMPETENCIAS,
+    DESCRICAO_EXPERIENCIAS,
+    DESCRICAO_FONTES,
+    DESCRICAO_REPAROS,
+    DESCRICAO_RESUMO,
+    DESCRICAO_TITULO,
+)
+
 
 TipoFonte = Literal[
     "experiencia", "resumo", "skills", "formacao", "certificacao", "idiomas", "nota", "candidatura"
@@ -172,12 +182,51 @@ class GenerateCvResponse(ComUso):
     markdown: str
 
 
-class ReescritaLlm(CamelModel):
-    markdown: str
+class FraseFonte(CamelModel):
+    texto: str
+    fontes: list[str] = Field(description=DESCRICAO_FONTES)
+
+
+class TermoFonte(CamelModel):
+    termo: str
+    fonte: str = Field(description="Id da fonte factual onde o termo aparece escrito")
+
+
+class CategoriaCompetencias(CamelModel):
+    categoria: str
+    termos: list[TermoFonte]
+
+
+class ExperienciaEstruturada(CamelModel):
+    experiencia_id: str
+    bullets: list[FraseFonte] = Field(description=DESCRICAO_BULLETS)
+
+
+class FraseReparada(CamelModel):
+    chave: str = Field(description="A chave da frase rejeitada, copiada sem alteracao")
+    texto: str = Field(description="A frase reescrita; vazio quando nenhuma fonte citavel sustenta a frase")
+    fontes: list[str] = Field(description=DESCRICAO_FONTES)
+
+
+class ReescritaEstruturada(CamelModel):
+    titulo: FraseFonte = Field(description=DESCRICAO_TITULO)
+    resumo: list[FraseFonte] = Field(description=DESCRICAO_RESUMO)
+    experiencias: list[ExperienciaEstruturada] = Field(description=DESCRICAO_EXPERIENCIAS)
+    competencias: list[CategoriaCompetencias] = Field(description=DESCRICAO_COMPETENCIAS)
+    reparos: list[FraseReparada] = Field(description=DESCRICAO_REPAROS)
+
+
+class EstruturaCurriculo(CamelModel):
+    titulo: FraseFonte | None = None
+    resumo: list[FraseFonte] = []
+    experiencias: list[ExperienciaEstruturada] = []
+    competencias: list[CategoriaCompetencias] = []
+    experiencias_omitidas: list[str] = []
 
 
 class ReduzirCvRequest(GenerateCvRequest):
-    markdown_atual: str
+    estrutura: EstruturaCurriculo
+    nivel: int = Field(default=1, ge=1, le=10)
 
 
 class AtsAnalysis(CamelModel):
@@ -192,6 +241,7 @@ class AtsAnalysis(CamelModel):
 
 class GeneratePipelineResponse(ComUso):
     markdown: str
+    estrutura: EstruturaCurriculo | None = None
     analise_inicial: AtsAnalysis
     analise_final: AtsAnalysis
     degradacao: str | None = None

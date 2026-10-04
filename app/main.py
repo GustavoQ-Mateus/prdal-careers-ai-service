@@ -212,7 +212,7 @@ def generate_pipeline(req: GenerateCvRequest, request: Request) -> GeneratePipel
 def reduzir(req: ReduzirCvRequest, request: Request) -> GeneratePipelineResponse:
     with _operacao_llm(request) as op:
         try:
-            return _com_uso(reduzir_curriculo(req, req.markdown_atual), op)
+            return _com_uso(reduzir_curriculo(req), op)
         except KeywordsUnavailable as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 

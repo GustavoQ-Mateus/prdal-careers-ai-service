@@ -22,22 +22,6 @@ REESCRITA_REJEITADA = Degradacao(
     "reescrita_rejeitada_validacao",
     "A reescrita não passou na verificação de fatos e formato; entregamos uma versão montada diretamente do seu perfil-mestre.",
 )
-AJUSTE_INDISPONIVEL = Degradacao(
-    "ajuste_aderencia_llm_indisponivel",
-    "O ajuste extra de aderência ficou indisponível; mantivemos a versão já validada.",
-)
-AJUSTE_REJEITADO = Degradacao(
-    "ajuste_aderencia_rejeitado_validacao",
-    "O ajuste extra de aderência não passou na verificação de fatos; mantivemos a versão já validada.",
-)
-CORTE_INDISPONIVEL = Degradacao(
-    "corte_pagina_llm_indisponivel",
-    "A redução para uma página ficou indisponível; mantivemos a versão anterior.",
-)
-CORTE_REJEITADO = Degradacao(
-    "corte_pagina_rejeitado_validacao",
-    "Não foi possível reduzir para uma página sem perder fatos; mantivemos a versão anterior.",
-)
 COPILOTO_INDISPONIVEL = Degradacao(
     "copiloto_turno_indisponivel",
     "O copiloto está indisponível no momento. Tente novamente em instantes.",

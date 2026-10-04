@@ -17,7 +17,7 @@ from app.llm import (
     operacao,
 )
 from app.main import app
-from app.schemas import KeywordsLlmResponse, ReescritaLlm
+from app.schemas import KeywordsLlmResponse, ReescritaEstruturada
 from tests.cliente_falso import ComClienteFalso, resposta
 
 KEYWORDS_OK = {"keywords": [{"termo": "Python", "peso": 1.0, "tipo": "stack"}]}
@@ -93,7 +93,7 @@ class RequisicaoNativaTest(unittest.TestCase):
     def test_esforco_desconhecido_e_erro_de_programacao(self):
         with ComClienteFalso() as cliente:
             with self.assertRaises(ValueError):
-                complete_model("s", "u", ReescritaLlm, chamador="teste", esforco="altissimo")
+                complete_model("s", "u", ReescritaEstruturada, chamador="teste", esforco="altissimo")
         self.assertEqual([], cliente.requisicoes)
 
 

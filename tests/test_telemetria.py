@@ -154,11 +154,18 @@ class UsoDevolvidoTest(unittest.TestCase):
             "vaga": {"titulo": "Backend", "empresa": "Empresa", "descricao": "Python"},
             "keywords": [{"termo": "Python", "peso": 1}],
         }
-        markdown = {"markdown": "# Pessoa\n**Backend**\n[CONTATO]\n\n## RESUMO\nPython."}
-        with ComClienteFalso(*[resposta(markdown) for _ in range(4)]):
+        estrutura = {
+            "titulo": {"texto": "Backend", "fontes": ["skills"]},
+            "resumo": [{"texto": "Experiencia com Python.", "fontes": ["skills"]}],
+            "experiencias": [],
+            "competencias": [],
+            "reparos": [],
+        }
+        with ComClienteFalso(*[resposta(estrutura) for _ in range(4)]):
             corpo = TestClient(app).post("/generate-cv-pipeline", json=corpo_req).json()
         self.assertEqual("claude-teste", corpo["modelo"])
-        self.assertEqual("reescrita.v1", corpo["promptVersion"])
+        self.assertEqual("reescrita.v2", corpo["promptVersion"])
+        self.assertEqual("Experiencia com Python.", corpo["estrutura"]["resumo"][0]["texto"])
         self.assertGreaterEqual(corpo["uso"]["chamadas"], 1)
 
     def test_sem_chamada_o_modelo_fica_vazio(self):

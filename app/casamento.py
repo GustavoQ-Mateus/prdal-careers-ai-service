@@ -43,6 +43,10 @@ def _grupos() -> tuple[tuple[str, ...], ...]:
     return tuple(tuple(grupo) for grupo in dados["grupos"])
 
 
+def dicionario_canonico() -> tuple[tuple[str, ...], ...]:
+    return _grupos()
+
+
 @lru_cache(maxsize=1)
 def _grupo_por_forma() -> dict[str, tuple[str, ...]]:
     return {compactar(forma): grupo for grupo in _grupos() for forma in grupo}

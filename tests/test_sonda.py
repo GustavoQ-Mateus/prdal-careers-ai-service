@@ -13,7 +13,13 @@ RESPOSTAS_POR_SCHEMA = {
     "TurnoLlm": {"tipo": "texto", "texto": "Vamos revisar a vaga.", "tool": None, "argsJson": None},
     "MensagemLlm": {"titulo": "Contato", "texto": "Ola, tenho interesse na vaga.", "destino": "email"},
     "FormularioLlm": {"titulo": "Respostas", "respostas": [{"campo": "Por que esta vaga?", "texto": "Afinidade."}], "texto": "Afinidade."},
-    "ReescritaLlm": {"markdown": "# Pessoa Exemplo\n**Backend**\n[CONTATO]\n\n## RESUMO\nPython."},
+    "ReescritaEstruturada": {
+        "titulo": {"texto": "Desenvolvedora Backend", "fontes": ["experiencia-1"]},
+        "resumo": [{"texto": "Desenvolvedora backend com APIs REST em Python.", "fontes": ["resumo"]}],
+        "experiencias": [],
+        "competencias": [],
+        "reparos": [],
+    },
 }
 
 

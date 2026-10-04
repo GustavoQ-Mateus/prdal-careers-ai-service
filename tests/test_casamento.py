@@ -1,8 +1,10 @@
 import unittest
 
 from app.casamento import canonico, casar_termo, termo_presente
-from app.generate import _analise, _termo_autorizado
-from app.schemas import GenerateCvRequest
+from app.fontes import fontes_da_geracao
+from app.generate import _analise
+from app.schemas import FraseFonte, GenerateCvRequest
+from app.verificacao import motivo_da_rejeicao, termos_reconhecidos
 
 
 def _req(keywords: list[str], skills: list[str]) -> GenerateCvRequest:
@@ -90,8 +92,9 @@ class CasamentoTest(unittest.TestCase):
         analise = _analise("## RESUMO PROFISSIONAL\nUso JavaScript e C# no dia a dia.\n", req)
         self.assertEqual(analise.keywords_encontradas, ["C#"])
         self.assertIn("Java", analise.keywords_criticas_ausentes)
-        self.assertFalse(_termo_autorizado("Java", req))
-        self.assertTrue(_termo_autorizado("C#", req))
+        fontes, termos = fontes_da_geracao(req), termos_reconhecidos(req)
+        self.assertIn("Java", motivo_da_rejeicao(FraseFonte(texto="uso Java", fontes=["skills"]), fontes, termos))
+        self.assertIsNone(motivo_da_rejeicao(FraseFonte(texto="uso C#", fontes=["skills"]), fontes, termos))
 
     def test_veredicto_descreve_cobertura_sem_prometer_filtro(self):
         req = _req(["Python", "Docker", "AWS", "Kafka"], [])

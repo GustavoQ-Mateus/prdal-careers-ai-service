@@ -37,6 +37,10 @@ class PrazoEsgotado(Exception):
     pass
 
 
+class TetoDeRequisicoes(LLMUnavailable):
+    pass
+
+
 class ValidacaoSemantica(ValueError):
     pass
 
@@ -104,6 +108,8 @@ class Operacao:
     operacao_id: str | None = None
     uso: Uso = field(default_factory=Uso)
     modelo: str | None = None
+    requisicoes: int = 0
+    teto_requisicoes: int | None = None
 
     def restante_s(self) -> float | None:
         if self.prazo is None:
@@ -131,6 +137,28 @@ def operacao(prazo_ms: int | None = None, operacao_id: str | None = None) -> Ite
 
 def operacao_atual() -> Operacao:
     return _operacao.get() or Operacao(prazo=None)
+
+
+@contextmanager
+def teto_de_requisicoes(teto: int) -> Iterator[Operacao]:
+    atual = _operacao.get()
+    if atual is None:
+        with operacao() as nova:
+            nova.teto_requisicoes = teto
+            yield nova
+        return
+    anterior = atual.teto_requisicoes
+    atual.teto_requisicoes = atual.requisicoes + teto
+    try:
+        yield atual
+    finally:
+        atual.teto_requisicoes = anterior
+
+
+def _contar_requisicao(op: Operacao) -> None:
+    if op.teto_requisicoes is not None and op.requisicoes >= op.teto_requisicoes:
+        raise TetoDeRequisicoes(f"teto de {op.teto_requisicoes} requisicoes ao modelo atingido")
+    op.requisicoes += 1
 
 
 def timeout_da_chamada(op: Operacao) -> float:
@@ -264,6 +292,7 @@ def _chamar(requisicao: dict[str, Any], op: Operacao, rotulo: dict[str, Any]) ->
     repeticao = 0
     while True:
         timeout = timeout_da_chamada(op)
+        _contar_requisicao(op)
         try:
             return _tentar(requisicao, op, rotulo, timeout)
         except anthropic.AnthropicError as exc:

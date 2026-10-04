@@ -13,6 +13,7 @@ from app.schemas import (
     TurnRequest,
 )
 from tests.cliente_falso import ComClienteFalso, resposta
+from tests.perfis import frase, reescrita, reparo
 
 
 def _perfil(nome: str, empresa: str, tecnologia: str) -> dict:
@@ -99,11 +100,17 @@ class PrefixoEmCacheTest(unittest.TestCase):
             redigir_formulario(RedigirFormularioRequest.model_validate({"vaga": {"titulo": "Dados"}, "campos": ["Disponibilidade"]}))
         self.assertPrefixoEstavel(cliente.requisicoes, ["Pretensao", "Disponibilidade"])
 
-    def test_reescrita_entre_geracoes_e_tentativas(self):
-        markdown = {"markdown": "# Nome\n**Titulo**\n[CONTATO]\n\n## RESUMO\nTexto."}
-        with ComClienteFalso(*[resposta(markdown) for _ in range(12)]) as cliente:
+    def test_reescrita_entre_geracoes_e_reparo(self):
+        com_rejeicao = reescrita(
+            frase("Desenvolvedora", "skills"),
+            [frase("Projeto interno de destaque.", "contexto-1")],
+            [],
+        )
+        respostas = [resposta(com_rejeicao), resposta(reparo())] * 2
+        with ComClienteFalso(*respostas) as cliente:
             generate_cv_pipeline(_geracao("Ana Souza", "Banco Alfa", "Python", "Backend Pleno"))
             generate_cv_pipeline(_geracao("Bruno Lima", "Loja Beta", "Kotlin", "Mobile Senior"))
+        self.assertEqual(4, len(cliente.requisicoes))
         self.assertPrefixoEstavel(
             cliente.requisicoes,
             ["Ana Souza", "Bruno Lima", "Banco Alfa", "Loja Beta", "Kotlin", "Backend Pleno", "Mobile Senior"],
