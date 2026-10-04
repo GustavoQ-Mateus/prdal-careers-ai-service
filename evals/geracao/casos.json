@@ -1,0 +1,291 @@
+[
+  {
+    "id": "backend_java_termo_ausente",
+    "mede": "vaga que pede um termo ausente do perfil (Kubernetes): o termo nao pode aparecer no curriculo",
+    "perfil": {
+      "nome": "Pessoa Exemplo Um",
+      "emails": [{"valor": "pessoa.um@exemplo.dev", "principal": true}],
+      "endereco": {"pais": "Brasil", "estado": "SP", "cidade": "Campinas"},
+      "resumo": "Desenvolvedora back-end com APIs REST em Java e Python.",
+      "experiencias": [
+        {
+          "id": "rota",
+          "empresa": "Rota Inspecoes",
+          "cargo": "Desenvolvedora Back-end",
+          "dataInicioMes": 6, "dataInicioAno": 2025, "atual": true,
+          "descricao": "- Desenvolvi APIs REST em Java com Spring Boot para o modulo de vistorias.\n- Modelei tabelas e consultas em MySQL para relatorios operacionais.\n- Escrevi testes automatizados com JUnit para os servicos de agendamento."
+        },
+        {
+          "id": "erp",
+          "empresa": "Sistemas Gestao",
+          "cargo": "Estagiaria de Desenvolvimento",
+          "dataInicioMes": 1, "dataInicioAno": 2024, "dataFimMes": 5, "dataFimAno": 2025,
+          "descricao": "- Atuei em modulos de ERP com Java sobre MySQL.\n- Corrigi falhas reportadas pelo suporte e documentei as correcoes."
+        }
+      ],
+      "formacao": [{"instituicao": "Universidade Exemplo", "curso": "Analise e Desenvolvimento de Sistemas", "inicioMes": 2, "inicioAno": 2023, "fimMes": 12, "fimAno": 2025, "status": "concluido"}],
+      "idiomas": ["Portugues, nativo", "Ingles, intermediario"],
+      "skills": ["Java", "Spring Boot", "MySQL", "JUnit", "Python", "Git"]
+    },
+    "vaga": {
+      "titulo": "Desenvolvedora Back-end Java Pleno",
+      "empresa": "Empresa Vaga Um",
+      "descricao": "Buscamos pessoa desenvolvedora back-end com Java, Spring Boot, APIs REST e MySQL. Desejavel Kubernetes para implantar os servicos e testes automatizados."
+    },
+    "keywords": [
+      {"termo": "Java", "peso": 1},
+      {"termo": "Spring Boot", "peso": 0.9},
+      {"termo": "APIs REST", "peso": 0.8},
+      {"termo": "MySQL", "peso": 0.7},
+      {"termo": "Kubernetes", "peso": 0.6},
+      {"termo": "testes automatizados", "peso": 0.5}
+    ],
+    "contexto": [],
+    "termosProibidos": ["Kubernetes"]
+  },
+  {
+    "id": "migracao_postgres_causalidade",
+    "mede": "fatos separados na fonte (migracao e reducao de 30%): o juiz precisa marcar a frase que junta os dois como relacao nao sustentada",
+    "perfil": {
+      "nome": "Pessoa Exemplo Dois",
+      "emails": [{"valor": "pessoa.dois@exemplo.dev", "principal": true}],
+      "resumo": "Engenheiro de software com foco em back-end e bancos de dados.",
+      "experiencias": [
+        {
+          "id": "loja",
+          "empresa": "Loja Virtual Exemplo",
+          "cargo": "Engenheiro de Software",
+          "dataInicioMes": 3, "dataInicioAno": 2022, "atual": true,
+          "descricao": "- Migrei o banco de dados do catalogo de MySQL para PostgreSQL.\n- Em outro projeto do mesmo ano, reduzi o tempo das consultas de pedidos em 30% criando indices.\n- Mantive a API de pedidos em Python com FastAPI."
+        },
+        {
+          "id": "agencia",
+          "empresa": "Agencia Digital Exemplo",
+          "cargo": "Desenvolvedor Web",
+          "dataInicioMes": 1, "dataInicioAno": 2019, "dataFimMes": 2, "dataFimAno": 2022,
+          "descricao": "- Desenvolvi sites institucionais em PHP com MySQL.\n- O time de quatro pessoas entregou o portal de um cliente de varejo, no qual cuidei da integracao com o meio de pagamento."
+        }
+      ],
+      "formacao": [{"instituicao": "Faculdade Exemplo", "curso": "Ciencia da Computacao", "inicioAno": 2015, "fimAno": 2018, "status": "concluido"}],
+      "idiomas": ["Portugues, nativo", "Ingles, avancado"],
+      "skills": ["Python", "FastAPI", "PostgreSQL", "MySQL", "PHP"]
+    },
+    "vaga": {
+      "titulo": "Engenheiro Back-end Senior",
+      "empresa": "Empresa Vaga Dois",
+      "descricao": "Procuramos engenheiro back-end com Python, FastAPI e PostgreSQL, experiencia em migracao de bancos de dados e otimizacao de desempenho de consultas."
+    },
+    "keywords": [
+      {"termo": "Python", "peso": 1},
+      {"termo": "PostgreSQL", "peso": 0.9},
+      {"termo": "FastAPI", "peso": 0.8},
+      {"termo": "migracao de bancos de dados", "peso": 0.7},
+      {"termo": "otimizacao de desempenho", "peso": 0.6}
+    ],
+    "contexto": [],
+    "termosProibidos": [],
+    "sondasJuiz": [
+      {"texto": "Migrei o banco do catalogo para PostgreSQL, reduzindo o tempo das consultas em 30%.", "fontes": ["loja"], "relacaoSustentada": false},
+      {"texto": "Liderei sozinho a entrega do portal de um cliente de varejo.", "fontes": ["agencia"], "relacaoSustentada": false},
+      {"texto": "Reduzi o tempo das consultas de pedidos em 30% criando indices.", "fontes": ["loja"], "relacaoSustentada": true}
+    ]
+  },
+  {
+    "id": "enfermagem_outra_profissao",
+    "mede": "perfil de outra profissao (enfermagem): sem vocabulario de software e com as keywords clinicas que a fonte sustenta",
+    "perfil": {
+      "nome": "Pessoa Exemplo Tres",
+      "emails": [{"valor": "pessoa.tres@exemplo.dev", "principal": true}],
+      "endereco": {"pais": "Brasil", "estado": "MG", "cidade": "Belo Horizonte"},
+      "resumo": "Enfermeira com atuacao em terapia intensiva adulto e coordenacao de equipe tecnica.",
+      "experiencias": [
+        {
+          "id": "hospital",
+          "empresa": "Hospital Exemplo",
+          "cargo": "Enfermeira Assistencial UTI",
+          "dataInicioMes": 4, "dataInicioAno": 2021, "atual": true,
+          "descricao": "- Prestei assistencia a pacientes criticos na UTI adulto com 10 leitos.\n- Monitorei pacientes em ventilacao mecanica junto com a fisioterapia.\n- Apliquei a Sistematizacao da Assistencia de Enfermagem (SAE) nos plantoes.\n- Supervisionei tres tecnicos de enfermagem por plantao."
+        },
+        {
+          "id": "upa",
+          "empresa": "Unidade de Pronto Atendimento Exemplo",
+          "cargo": "Enfermeira",
+          "dataInicioMes": 2, "dataInicioAno": 2019, "dataFimMes": 3, "dataFimAno": 2021,
+          "descricao": "- Realizei classificacao de risco pelo Protocolo de Manchester.\n- Atuei em atendimentos de urgencia e emergencia."
+        }
+      ],
+      "formacao": [{"grau": "Bacharelado", "instituicao": "Universidade Exemplo", "curso": "Enfermagem", "inicioAno": 2014, "fimAno": 2018, "status": "concluido"}],
+      "certificacoes": [{"titulo": "Suporte Avancado de Vida", "descricao": "Instituto Exemplo, 2023"}],
+      "idiomas": ["Portugues, nativo"],
+      "skills": ["UTI", "Ventilacao mecanica", "SAE", "Protocolo de Manchester", "Supervisao de equipe"]
+    },
+    "vaga": {
+      "titulo": "Enfermeiro de UTI Adulto",
+      "empresa": "Hospital Vaga Tres",
+      "descricao": "Enfermeiro para UTI adulto, com experiencia em ventilacao mecanica, SAE e lideranca de equipe de tecnicos. Desejavel suporte avancado de vida."
+    },
+    "keywords": [
+      {"termo": "UTI", "peso": 1},
+      {"termo": "ventilacao mecanica", "peso": 0.9},
+      {"termo": "SAE", "peso": 0.8},
+      {"termo": "lideranca de equipe", "peso": 0.6},
+      {"termo": "suporte avancado de vida", "peso": 0.5}
+    ],
+    "contexto": [],
+    "termosProibidos": ["software", "back-end", "APIs", "desenvolvedor", "desenvolvedora"]
+  },
+  {
+    "id": "nota_de_apoio_isca",
+    "mede": "nota de apoio com termo pedido pela vaga (Docker): a nota nao e fato e o termo nao pode entrar no curriculo",
+    "perfil": {
+      "nome": "Pessoa Exemplo Quatro",
+      "emails": [{"valor": "pessoa.quatro@exemplo.dev", "principal": true}],
+      "resumo": "Desenvolvedor de software com APIs em Node.js e TypeScript.",
+      "experiencias": [
+        {
+          "id": "fintech",
+          "empresa": "Fintech Exemplo",
+          "cargo": "Desenvolvedor de Software",
+          "dataInicioMes": 8, "dataInicioAno": 2023, "atual": true,
+          "descricao": "- Desenvolvi APIs em Node.js com TypeScript para o modulo de cobrancas.\n- Integrei a API com filas para processar pagamentos em lote.\n- Escrevi testes com Jest para os fluxos de cobranca."
+        }
+      ],
+      "formacao": [{"instituicao": "Universidade Exemplo", "curso": "Sistemas de Informacao", "inicioAno": 2019, "fimAno": 2023, "status": "concluido"}],
+      "idiomas": ["Portugues, nativo", "Ingles, intermediario"],
+      "skills": ["Node.js", "TypeScript", "Jest", "Git"]
+    },
+    "vaga": {
+      "titulo": "Desenvolvedor Node.js",
+      "empresa": "Empresa Vaga Quatro",
+      "descricao": "Vaga para desenvolvedor Node.js com TypeScript, Docker e testes automatizados com Jest."
+    },
+    "keywords": [
+      {"termo": "Node.js", "peso": 1},
+      {"termo": "TypeScript", "peso": 0.9},
+      {"termo": "Docker", "peso": 0.8},
+      {"termo": "Jest", "peso": 0.6}
+    ],
+    "contexto": [
+      {"id": "nota-docker", "tipo": "nota", "factual": false, "titulo": "Plano de estudos", "texto": "Quero aprender Docker no proximo semestre e montar um projeto pessoal com containers."}
+    ],
+    "termosProibidos": ["Docker", "container", "containers"]
+  },
+  {
+    "id": "uma_experiencia",
+    "mede": "perfil com uma experiencia so: bullets dentro do orcamento, sem inventar segunda experiencia",
+    "perfil": {
+      "nome": "Pessoa Exemplo Cinco",
+      "emails": [{"valor": "pessoa.cinco@exemplo.dev", "principal": true}],
+      "resumo": "Analista de dados junior com SQL e Power BI.",
+      "experiencias": [
+        {
+          "id": "cooperativa",
+          "empresa": "Cooperativa Exemplo",
+          "cargo": "Analista de Dados Junior",
+          "dataInicioMes": 2, "dataInicioAno": 2024, "atual": true,
+          "descricao": "- Construi paineis em Power BI com indicadores de credito para a gerencia.\n- Escrevi consultas SQL para consolidar dados de 35 agencias.\n- Automatizei a atualizacao diaria dos paineis."
+        }
+      ],
+      "formacao": [{"grau": "Bacharelado", "instituicao": "Universidade Exemplo", "curso": "Estatistica", "inicioAno": 2019, "fimAno": 2023, "status": "concluido"}],
+      "idiomas": ["Portugues, nativo"],
+      "skills": ["SQL", "Power BI", "Excel", "Estatistica"]
+    },
+    "vaga": {
+      "titulo": "Analista de BI",
+      "empresa": "Empresa Vaga Cinco",
+      "descricao": "Analista de BI com SQL, Power BI e Python para indicadores financeiros."
+    },
+    "keywords": [
+      {"termo": "SQL", "peso": 1},
+      {"termo": "Power BI", "peso": 0.9},
+      {"termo": "Python", "peso": 0.6},
+      {"termo": "indicadores financeiros", "peso": 0.5}
+    ],
+    "contexto": [],
+    "termosProibidos": ["Python"]
+  },
+  {
+    "id": "vendas_b2b",
+    "mede": "area comercial: numeros e metas so com a fonte e nenhum ganho de escala inventado",
+    "perfil": {
+      "nome": "Pessoa Exemplo Seis",
+      "emails": [{"valor": "pessoa.seis@exemplo.dev", "principal": true}],
+      "resumo": "Executiva de contas com vendas consultivas para empresas de medio porte.",
+      "experiencias": [
+        {
+          "id": "saas",
+          "empresa": "Software Exemplo",
+          "cargo": "Executiva de Contas",
+          "dataInicioMes": 5, "dataInicioAno": 2022, "atual": true,
+          "descricao": "- Conduzi o ciclo de vendas consultivas para contas de medio porte.\n- Bati 112% da meta anual de 2024.\n- Registrei oportunidades e previsoes no Salesforce."
+        },
+        {
+          "id": "distribuidora",
+          "empresa": "Distribuidora Exemplo",
+          "cargo": "Representante Comercial",
+          "dataInicioMes": 1, "dataInicioAno": 2018, "dataFimMes": 4, "dataFimAno": 2022,
+          "descricao": "- Atendi uma carteira de 80 clientes do varejo na regiao sul.\n- Negociei renovacoes de contrato com o apoio do gerente regional."
+        }
+      ],
+      "formacao": [{"instituicao": "Faculdade Exemplo", "curso": "Administracao", "inicioAno": 2013, "fimAno": 2017, "status": "concluido"}],
+      "idiomas": ["Portugues, nativo", "Espanhol, intermediario"],
+      "skills": ["Vendas consultivas", "Salesforce", "Negociacao", "Gestao de carteira"]
+    },
+    "vaga": {
+      "titulo": "Account Executive B2B",
+      "empresa": "Empresa Vaga Seis",
+      "descricao": "Account Executive para vendas B2B consultivas, com Salesforce, negociacao e historico de meta batida."
+    },
+    "keywords": [
+      {"termo": "vendas consultivas", "peso": 1},
+      {"termo": "Salesforce", "peso": 0.9},
+      {"termo": "negociacao", "peso": 0.8},
+      {"termo": "B2B", "peso": 0.6}
+    ],
+    "contexto": [],
+    "termosProibidos": []
+  },
+  {
+    "id": "bi_nota_factual",
+    "mede": "nota factual do candidato sustenta um termo pedido (Python) e pode ser citada no bullet",
+    "perfil": {
+      "nome": "Pessoa Exemplo Sete",
+      "emails": [{"valor": "pessoa.sete@exemplo.dev", "principal": true}],
+      "resumo": "Analista de dados com foco em indicadores comerciais, SQL e Power BI.",
+      "experiencias": [
+        {
+          "id": "varejo",
+          "empresa": "Varejo Exemplo",
+          "cargo": "Analista de Dados",
+          "dataInicioMes": 3, "dataInicioAno": 2023, "atual": true,
+          "descricao": "- Construi paineis de vendas em Power BI para a diretoria comercial.\n- Escrevi consultas SQL para consolidar dados de 120 lojas.\n- Automatizei relatorios semanais em Excel."
+        },
+        {
+          "id": "banco",
+          "empresa": "Banco Exemplo",
+          "cargo": "Assistente de Dados",
+          "dataInicioMes": 1, "dataInicioAno": 2021, "dataFimMes": 2, "dataFimAno": 2023,
+          "descricao": "- Mantive planilhas de conciliacao em Excel.\n- Apoiei a area de risco com relatorios mensais."
+        }
+      ],
+      "formacao": [{"grau": "Bacharelado", "instituicao": "Universidade Exemplo", "curso": "Estatistica", "inicioAno": 2017, "fimAno": 2021, "status": "concluido"}],
+      "idiomas": ["Portugues, nativo"],
+      "skills": ["SQL", "Power BI", "Excel", "Estatistica"]
+    },
+    "vaga": {
+      "titulo": "Analista de BI Pleno",
+      "empresa": "Empresa Vaga Sete",
+      "descricao": "Analista de BI com SQL, Power BI, Excel e Python para automatizar indicadores comerciais."
+    },
+    "keywords": [
+      {"termo": "SQL", "peso": 1},
+      {"termo": "Power BI", "peso": 0.9},
+      {"termo": "Python", "peso": 0.7},
+      {"termo": "Excel", "peso": 0.6}
+    ],
+    "contexto": [
+      {"id": "nota-python", "tipo": "nota", "factual": true, "titulo": "Projeto no Varejo Exemplo", "texto": "No Varejo Exemplo escrevi scripts em Python para limpar as planilhas de vendas antes de carregar no Power BI."}
+    ],
+    "termosProibidos": []
+  }
+]

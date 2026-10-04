@@ -1,0 +1,1062 @@
+{
+  "backend_java_termo_ausente": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Desenvolvedora Back-end",
+          "fontes": [
+            "rota"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Desenvolvedora back-end com APIs REST em Java e Python.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "rota",
+            "bullets": [
+              {
+                "texto": "Implantei os servicos de vistorias em Kubernetes.",
+                "fontes": [
+                  "rota"
+                ]
+              },
+              {
+                "texto": "Desenvolvi APIs REST em Java com Spring Boot para o modulo de vistorias.",
+                "fontes": [
+                  "rota"
+                ]
+              },
+              {
+                "texto": "Modelei tabelas e consultas em MySQL para relatorios operacionais.",
+                "fontes": [
+                  "rota"
+                ]
+              },
+              {
+                "texto": "Escrevi testes automatizados com JUnit para os servicos de agendamento.",
+                "fontes": [
+                  "rota"
+                ]
+              }
+            ]
+          },
+          {
+            "experienciaId": "erp",
+            "bullets": [
+              {
+                "texto": "Atuei em modulos de ERP com Java sobre MySQL.",
+                "fontes": [
+                  "erp"
+                ]
+              },
+              {
+                "texto": "Corrigi falhas reportadas pelo suporte e documentei as correcoes.",
+                "fontes": [
+                  "erp"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "Java",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Spring Boot",
+                "fonte": "skills"
+              },
+              {
+                "termo": "MySQL",
+                "fonte": "skills"
+              },
+              {
+                "termo": "JUnit",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "titulo": {
+          "texto": "",
+          "fontes": []
+        },
+        "resumo": [],
+        "experiencias": [],
+        "competencias": [],
+        "reparos": [
+          {
+            "chave": "bullet.rota.1",
+            "texto": "Escrevi testes automatizados com JUnit para os servicos de agendamento.",
+            "fontes": [
+              "rota"
+            ]
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 700,
+        "saida": 120,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.rota.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.rota.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.rota.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.rota.4",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.erp.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.erp.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Back-end Java Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
+  ],
+  "migracao_postgres_causalidade": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Engenheiro de Software",
+          "fontes": [
+            "loja"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Engenheiro de software com foco em back-end e bancos de dados.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "loja",
+            "bullets": [
+              {
+                "texto": "Migrei o banco do catalogo para PostgreSQL, reduzindo o tempo das consultas em 30%.",
+                "fontes": [
+                  "loja"
+                ]
+              },
+              {
+                "texto": "Migrei o banco de dados do catalogo de MySQL para PostgreSQL.",
+                "fontes": [
+                  "loja"
+                ]
+              },
+              {
+                "texto": "Em outro projeto do mesmo ano, reduzi o tempo das consultas de pedidos em 30% criando indices.",
+                "fontes": [
+                  "loja"
+                ]
+              },
+              {
+                "texto": "Mantive a API de pedidos em Python com FastAPI.",
+                "fontes": [
+                  "loja"
+                ]
+              }
+            ]
+          },
+          {
+            "experienciaId": "agencia",
+            "bullets": [
+              {
+                "texto": "Desenvolvi sites institucionais em PHP com MySQL.",
+                "fontes": [
+                  "agencia"
+                ]
+              },
+              {
+                "texto": "O time de quatro pessoas entregou o portal de um cliente de varejo, no qual cuidei da integracao com o meio de pagamento.",
+                "fontes": [
+                  "agencia"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "Python",
+                "fonte": "skills"
+              },
+              {
+                "termo": "FastAPI",
+                "fonte": "skills"
+              },
+              {
+                "termo": "PostgreSQL",
+                "fonte": "skills"
+              },
+              {
+                "termo": "MySQL",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.loja.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": false,
+            "justificativa": "a frase junta dois fatos separados na fonte"
+          },
+          {
+            "chave": "bullet.loja.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.loja.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.loja.4",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.agencia.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.agencia.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "sonda.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": false,
+            "justificativa": "sonda de calibracao"
+          },
+          {
+            "chave": "sonda.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": false,
+            "justificativa": "sonda de calibracao"
+          },
+          {
+            "chave": "sonda.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Engenheiro Back-end Senior",
+            "relacaoSustentada": true,
+            "justificativa": "sonda de calibracao"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
+  ],
+  "enfermagem_outra_profissao": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Enfermeira Assistencial UTI",
+          "fontes": [
+            "hospital"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Enfermeira com atuacao em terapia intensiva adulto e coordenacao de equipe tecnica.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "hospital",
+            "bullets": [
+              {
+                "texto": "Prestei assistencia a pacientes criticos na UTI adulto com 10 leitos.",
+                "fontes": [
+                  "hospital"
+                ]
+              },
+              {
+                "texto": "Monitorei pacientes em ventilacao mecanica junto com a fisioterapia.",
+                "fontes": [
+                  "hospital"
+                ]
+              },
+              {
+                "texto": "Apliquei a Sistematizacao da Assistencia de Enfermagem (SAE) nos plantoes.",
+                "fontes": [
+                  "hospital"
+                ]
+              }
+            ]
+          },
+          {
+            "experienciaId": "upa",
+            "bullets": [
+              {
+                "texto": "Realizei classificacao de risco pelo Protocolo de Manchester.",
+                "fontes": [
+                  "upa"
+                ]
+              },
+              {
+                "texto": "Atuei em atendimentos de urgencia e emergencia.",
+                "fontes": [
+                  "upa"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "UTI",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Ventilacao mecanica",
+                "fonte": "skills"
+              },
+              {
+                "termo": "SAE",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Protocolo de Manchester",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Enfermeiro de UTI Adulto",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Enfermeiro de UTI Adulto",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.hospital.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Enfermeiro de UTI Adulto",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.hospital.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Enfermeiro de UTI Adulto",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.hospital.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Enfermeiro de UTI Adulto",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.upa.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Enfermeiro de UTI Adulto",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.upa.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Enfermeiro de UTI Adulto",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
+  ],
+  "nota_de_apoio_isca": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Desenvolvedor de Software",
+          "fontes": [
+            "fintech"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Desenvolvedor de software com APIs em Node.js e TypeScript.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "fintech",
+            "bullets": [
+              {
+                "texto": "Desenvolvi APIs em Node.js com TypeScript para o modulo de cobrancas.",
+                "fontes": [
+                  "fintech"
+                ]
+              },
+              {
+                "texto": "Integrei a API com filas para processar pagamentos em lote.",
+                "fontes": [
+                  "fintech"
+                ]
+              },
+              {
+                "texto": "Escrevi testes com Jest para os fluxos de cobranca.",
+                "fontes": [
+                  "fintech"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "Node.js",
+                "fonte": "skills"
+              },
+              {
+                "termo": "TypeScript",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Jest",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Git",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedor Node.js",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedor Node.js",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.fintech.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedor Node.js",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.fintech.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedor Node.js",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.fintech.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedor Node.js",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
+  ],
+  "uma_experiencia": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Analista de Dados Junior",
+          "fontes": [
+            "cooperativa"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Analista de dados junior com SQL e Power BI.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "cooperativa",
+            "bullets": [
+              {
+                "texto": "Construi paineis em Power BI com indicadores de credito para a gerencia.",
+                "fontes": [
+                  "cooperativa"
+                ]
+              },
+              {
+                "texto": "Escrevi consultas SQL para consolidar dados de 35 agencias.",
+                "fontes": [
+                  "cooperativa"
+                ]
+              },
+              {
+                "texto": "Automatizei a atualizacao diaria dos paineis.",
+                "fontes": [
+                  "cooperativa"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "SQL",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Power BI",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Excel",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Estatistica",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.cooperativa.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.cooperativa.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.cooperativa.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
+  ],
+  "vendas_b2b": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Executiva de Contas",
+          "fontes": [
+            "saas"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Executiva de contas com vendas consultivas para empresas de medio porte.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "saas",
+            "bullets": [
+              {
+                "texto": "Conduzi o ciclo de vendas consultivas para contas de medio porte.",
+                "fontes": [
+                  "saas"
+                ]
+              },
+              {
+                "texto": "Bati 112% da meta anual de 2024.",
+                "fontes": [
+                  "saas"
+                ]
+              },
+              {
+                "texto": "Registrei oportunidades e previsoes no Salesforce.",
+                "fontes": [
+                  "saas"
+                ]
+              }
+            ]
+          },
+          {
+            "experienciaId": "distribuidora",
+            "bullets": [
+              {
+                "texto": "Atendi uma carteira de 80 clientes do varejo na regiao sul.",
+                "fontes": [
+                  "distribuidora"
+                ]
+              },
+              {
+                "texto": "Negociei renovacoes de contrato com o apoio do gerente regional.",
+                "fontes": [
+                  "distribuidora"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "Vendas consultivas",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Salesforce",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Negociacao",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Gestao de carteira",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Account Executive B2B",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Account Executive B2B",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.saas.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Account Executive B2B",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.saas.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Account Executive B2B",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.saas.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Account Executive B2B",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.distribuidora.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Account Executive B2B",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.distribuidora.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Account Executive B2B",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
+  ],
+  "bi_nota_factual": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Analista de Dados",
+          "fontes": [
+            "varejo"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Analista de dados com foco em indicadores comerciais, SQL e Power BI.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "varejo",
+            "bullets": [
+              {
+                "texto": "Construi paineis de vendas em Power BI para a diretoria comercial.",
+                "fontes": [
+                  "varejo"
+                ]
+              },
+              {
+                "texto": "Escrevi consultas SQL para consolidar dados de 120 lojas.",
+                "fontes": [
+                  "varejo"
+                ]
+              },
+              {
+                "texto": "Automatizei relatorios semanais em Excel.",
+                "fontes": [
+                  "varejo"
+                ]
+              }
+            ]
+          },
+          {
+            "experienciaId": "banco",
+            "bullets": [
+              {
+                "texto": "Mantive planilhas de conciliacao em Excel.",
+                "fontes": [
+                  "banco"
+                ]
+              },
+              {
+                "texto": "Apoiei a area de risco com relatorios mensais.",
+                "fontes": [
+                  "banco"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "SQL",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Power BI",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Excel",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Estatistica",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.varejo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.varejo.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.varejo.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.banco.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.banco.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Analista de BI Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
+  ]
+}

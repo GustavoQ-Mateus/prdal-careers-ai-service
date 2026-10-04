@@ -146,6 +146,13 @@ class _Rascunho:
 
 
 @dataclass
+class DiagnosticoGeracao:
+    rejeitadas: list[Rejeicao] = field(default_factory=list)
+    reparadas: int = 0
+    descartadas: list[Rejeicao] = field(default_factory=list)
+
+
+@dataclass
 class _Contexto:
     req: GenerateCvRequest
     fontes: dict[str, Fonte]
@@ -263,7 +270,7 @@ def _user_reparo(rascunho: _Rascunho, ctx: _Contexto) -> str:
     )
 
 
-def _reparar(rascunho: _Rascunho, ctx: _Contexto) -> None:
+def _reparar(rascunho: _Rascunho, ctx: _Contexto) -> int:
     pendentes = {r.chave: r for r in rascunho.rejeitadas}
     resposta = complete_model(
         _system_prompt(),
@@ -294,6 +301,7 @@ def _reparar(rascunho: _Rascunho, ctx: _Contexto) -> None:
         "reparo localizado rejeitadas=%s reparadas=%s descartadas=%s",
         len(pendentes), aceitas, len(rascunho.descartadas),
     )
+    return aceitas
 
 
 def _montar(rascunho: _Rascunho, ctx: _Contexto) -> tuple[EstruturaCurriculo, bool]:
@@ -382,7 +390,9 @@ def analisar_ats(req: GenerateCvRequest) -> AtsAnalysis:
     return _analise(curriculo_do_perfil(req)[1], req)
 
 
-def _reescrever(ctx: _Contexto) -> tuple[EstruturaCurriculo | None, str | None]:
+def _reescrever(
+    ctx: _Contexto, diagnostico: DiagnosticoGeracao
+) -> tuple[EstruturaCurriculo | None, str | None]:
     try:
         resposta = complete_model(
             _system_prompt(),
@@ -395,14 +405,16 @@ def _reescrever(ctx: _Contexto) -> tuple[EstruturaCurriculo | None, str | None]:
     except LLMUnavailable as exc:
         return None, deg.registrar(deg.REESCRITA_INDISPONIVEL, exc)
     rascunho = _verificar(resposta, ctx)
+    diagnostico.rejeitadas = list(rascunho.rejeitadas)
     for rejeicao in rascunho.rejeitadas:
         logger.info("frase rejeitada chave=%s motivo=%s", rejeicao.chave, rejeicao.motivo)
     if rascunho.rejeitadas:
         try:
-            _reparar(rascunho, ctx)
+            diagnostico.reparadas = _reparar(rascunho, ctx)
         except LLMUnavailable as exc:
             rascunho.descartadas.extend(rascunho.rejeitadas)
             logger.warning("reparo indisponivel; seguindo com as frases aceitas: %s", exc)
+    diagnostico.descartadas = list(rascunho.descartadas)
     estrutura, aceitou = _montar(rascunho, ctx)
     if not aceitou:
         motivos = "; ".join(f"{r.chave}: {r.motivo}" for r in rascunho.descartadas) or "resposta sem frases"
@@ -410,13 +422,15 @@ def _reescrever(ctx: _Contexto) -> tuple[EstruturaCurriculo | None, str | None]:
     return estrutura, None
 
 
-def generate_cv_pipeline(req: GenerateCvRequest) -> GeneratePipelineResponse:
+def generate_cv_pipeline(
+    req: GenerateCvRequest, diagnostico: DiagnosticoGeracao | None = None
+) -> GeneratePipelineResponse:
     _exigir_keywords(req, "gerar o curriculo")
     ctx = _contexto(req)
     base = estrutura_do_perfil(req, ctx.fontes, ctx.idioma)
     inicial = _analise(renderizar(req.perfil_mestre, base, ctx.idioma), req)
     with teto_de_requisicoes(TETO_REQUISICOES):
-        estrutura, degradacao = _reescrever(ctx)
+        estrutura, degradacao = _reescrever(ctx, diagnostico or DiagnosticoGeracao())
     estrutura = estrutura or base
     markdown = renderizar(req.perfil_mestre, estrutura, ctx.idioma)
     return GeneratePipelineResponse(

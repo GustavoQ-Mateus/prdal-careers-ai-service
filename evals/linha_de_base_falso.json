@@ -3,60 +3,62 @@
     "metricas": {
       "metrica_sem_fonte": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 0,
         "absoluto": 0
       },
       "termos_proibidos_presentes": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 0,
         "absoluto": 0
       },
       "violacoes_formato": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 0,
         "absoluto": 0
       },
       "degradadas": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 0,
         "absoluto": 0
       },
       "cobertura_keywords": {
         "direcao": "maior",
-        "valor": null,
+        "valor": 0.7119,
         "limiar": 0.05
       },
       "requisicoes_media": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 1.1429,
         "limiar": 0.5
       },
       "requisicoes_max": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 2,
         "absoluto": 6
       },
       "frases_descartadas": {
         "direcao": "menor",
-        "valor": null,
+        "valor": 0,
         "limiar": 2
       },
       "juiz_requisito": {
         "direcao": "maior",
-        "valor": null,
+        "valor": 1.0,
         "limiar": 0.1
       },
       "juiz_relacao": {
         "direcao": "maior",
-        "valor": null,
+        "valor": 0.9787,
         "limiar": 0.05
       },
       "juiz_sondas": {
         "direcao": "maior",
-        "valor": null,
+        "valor": 1.0,
         "absoluto": 1.0
       }
-    }
+    },
+    "gravadaEm": "2026-10-04",
+    "modelo": "falso"
   },
   "agente": {
     "metricas": {
