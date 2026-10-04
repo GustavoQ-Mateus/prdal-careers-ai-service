@@ -5,6 +5,7 @@ from app.schemas import Keyword
 
 CABECALHO = "# N\n**D**\nc\n"
 SECOES = "## EXPERIÊNCIA PROFISSIONAL\n## COMPETÊNCIAS\n## FORMAÇÃO ACADÊMICA\n"
+SECOES_COM_CONTEUDO = "## EXPERIÊNCIA PROFISSIONAL\nx\n## COMPETÊNCIAS\nx\n## FORMAÇÃO ACADÊMICA\nx\n"
 
 
 def _kw(*termos: str) -> list[Keyword]:
@@ -46,12 +47,18 @@ class ScoreTest(unittest.TestCase):
             "email: a@b.com\n"
         )
         self.assertEqual(calcular_score(sem_heading, _kw("Python")).breakdown.secoes, 0)
-        com_heading = CABECALHO + "## RESUMO PROFISSIONAL\nx\n" + SECOES
+        com_heading = CABECALHO + "## RESUMO PROFISSIONAL\nx\n" + SECOES_COM_CONTEUDO
         self.assertEqual(calcular_score(com_heading, _kw("Python")).breakdown.secoes, 100)
 
+    def test_cabecalho_vazio_nao_conta_como_secao(self):
+        vazias = CABECALHO + "## RESUMO PROFISSIONAL\nx\n" + SECOES
+        self.assertEqual(calcular_score(vazias, _kw("Python")).breakdown.secoes, 25)
+        so_espacos = CABECALHO + "## RESUMO PROFISSIONAL\nx\n## FORMAÇÃO ACADÊMICA\n   \n\n"
+        self.assertEqual(calcular_score(so_espacos, _kw("Python")).breakdown.secoes, 25)
+
     def test_headings_em_ingles_e_espanhol_sao_reconhecidos(self):
-        en = "## PROFESSIONAL SUMMARY\n## SKILLS\n## PROFESSIONAL EXPERIENCE\n## EDUCATION\n"
-        es = "## RESUMEN PROFESIONAL\n## COMPETENCIAS\n## EXPERIENCIA PROFESIONAL\n## FORMACIÓN ACADÉMICA\n"
+        en = "## PROFESSIONAL SUMMARY\nx\n## SKILLS\nx\n## PROFESSIONAL EXPERIENCE\nx\n## EDUCATION\nx\n"
+        es = "## RESUMEN PROFESIONAL\nx\n## COMPETENCIAS\nx\n## EXPERIENCIA PROFESIONAL\nx\n## FORMACIÓN ACADÉMICA\nx\n"
         self.assertEqual(calcular_score(en, _kw("Python")).breakdown.secoes, 100)
         self.assertEqual(calcular_score(es, _kw("Python")).breakdown.secoes, 100)
 

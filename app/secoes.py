@@ -54,4 +54,4 @@ def secoes_reconhecidas(markdown: str) -> dict[str, str]:
         fim = headings[i + 1].start() if i + 1 < len(headings) else len(markdown)
         corpo = markdown[heading.end():fim].strip()
         secoes[secao] = f"{secoes[secao]}\n{corpo}".strip() if secao in secoes else corpo
-    return secoes
+    return {secao: corpo for secao, corpo in secoes.items() if corpo}

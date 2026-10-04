@@ -226,19 +226,18 @@ def renderizar(perfil: PerfilMestre, estrutura: EstruturaCurriculo, idioma: str)
         linhas += ["", contato]
 
     resumo = " ".join(texto_limpo(frase.texto) for frase in estrutura.resumo if frase.texto.strip())
-    linhas += ["", f"## {h['resumo']}"]
-    if resumo:
-        linhas.append(resumo)
+    _secao(linhas, h["resumo"], [resumo])
 
-    linhas += ["", f"## {h['competencias']}"]
+    competencias = []
     for categoria in estrutura.competencias:
         termos = [texto_limpo(t.termo) for t in categoria.termos if t.termo.strip()]
         if termos:
-            linhas.append(f"- {texto_limpo(categoria.categoria)}: {', '.join(termos)}")
+            competencias.append(f"- {texto_limpo(categoria.categoria)}: {', '.join(termos)}")
+    _secao(linhas, h["competencias"], competencias)
 
     bullets_por_id = {item.experiencia_id: item.bullets for item in estrutura.experiencias}
     omitidas = set(estrutura.experiencias_omitidas)
-    linhas += ["", f"## {h['experiencia']}"]
+    experiencias: list[str] = []
     for experiencia_id, experiencia in experiencias_por_recencia(perfil):
         if experiencia_id in omitidas:
             continue
@@ -246,16 +245,21 @@ def renderizar(perfil: PerfilMestre, estrutura: EstruturaCurriculo, idioma: str)
         cargo = texto_limpo(experiencia.cargo)
         periodo = periodo_experiencia(experiencia, idioma)
         cabecalho = " | ".join(p for p in (f"**{empresa}**" if empresa else "", cargo, periodo) if p)
-        linhas += ["", cabecalho]
+        experiencias += ["", cabecalho]
         for bullet in bullets_por_id.get(experiencia_id, []):
             if bullet.texto.strip():
-                linhas.append(f"- {texto_limpo(bullet.texto)}")
+                experiencias.append(f"- {texto_limpo(bullet.texto)}")
+    _secao(linhas, h["experiencia"], experiencias)
 
     formacoes = [texto for f in perfil.formacao if (texto := texto_formacao(f, idioma))]
     certificacoes = [texto for c in perfil.certificacoes if (texto := texto_certificacao(c))]
-    linhas += ["", f"## {h['formacao']}", *formacoes]
-    linhas += ["", f"## {h['certificacoes']}", *[f"- {item}" for item in certificacoes]]
-    linhas += ["", f"## {h['idiomas']}"]
-    if perfil.idiomas:
-        linhas.append(" | ".join(perfil.idiomas))
+    idiomas = [item.strip() for item in perfil.idiomas if item.strip()]
+    _secao(linhas, h["formacao"], formacoes)
+    _secao(linhas, h["certificacoes"], [f"- {item}" for item in certificacoes])
+    _secao(linhas, h["idiomas"], [" | ".join(idiomas)])
     return "\n".join(linhas).strip()
+
+
+def _secao(linhas: list[str], titulo: str, corpo: list[str]) -> None:
+    if any(linha.strip() for linha in corpo):
+        linhas += ["", f"## {titulo}", *corpo]

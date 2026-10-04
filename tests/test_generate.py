@@ -169,6 +169,15 @@ class PipelineEstruturadoTest(unittest.TestCase):
         self.assertNotIn("Full-Stack", markdown)
         self.assertEqual(2, len(_cabecalhos_experiencia(markdown)))
 
+    def test_secao_sem_conteudo_nao_e_renderizada(self):
+        perfil = {**PERFIL_DEV, "formacao": [], "certificacoes": [], "idiomas": [" "]}
+        req = GenerateCvRequest.model_validate({**req_dev().model_dump(by_alias=True), "perfilMestre": perfil})
+        markdown = curriculo_do_perfil(req)[1]
+        for cabecalho in ("## FORMAÇÃO ACADÊMICA", "## CERTIFICAÇÕES", "## IDIOMAS"):
+            self.assertNotIn(cabecalho, markdown)
+        self.assertIn("## EXPERIÊNCIA PROFISSIONAL", markdown)
+        self.assertFalse(markdown.rstrip().endswith("##"))
+
     def test_experiencia_desconhecida_na_resposta_e_ignorada(self):
         estranha = reescrita(
             frase("Desenvolvedora Back-End", "rota"),
