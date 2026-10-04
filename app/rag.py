@@ -74,6 +74,8 @@ def indexar(documentos: list[Documento]) -> IngestResponse:
                     "usuarioId": doc.usuario_id,
                     "origem": doc.origem,
                     "origemId": doc.origem_id,
+                    "tipo": doc.tipo,
+                    "factual": doc.factual,
                     "titulo": doc.titulo,
                 }
                 for _ in partes

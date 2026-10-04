@@ -213,10 +213,17 @@ class TaxonomiaResponse(CamelModel):
     niveis: list[str] = []
 
 
+TipoFonte = Literal[
+    "experiencia", "resumo", "skills", "formacao", "certificacao", "idiomas", "nota", "candidatura"
+]
+
+
 class Documento(CamelModel):
     usuario_id: str
     origem: str
     origem_id: str
+    tipo: TipoFonte = "nota"
+    factual: bool = False
     titulo: str = ""
     texto: str
 
