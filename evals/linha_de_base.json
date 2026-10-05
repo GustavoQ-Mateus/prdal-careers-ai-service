@@ -55,6 +55,11 @@
         "direcao": "maior",
         "valor": null,
         "absoluto": 1.0
+      },
+      "juiz_relacao_falhas": {
+        "direcao": "menor",
+        "valor": null,
+        "limiar": 0
       }
     }
   },

@@ -55,6 +55,11 @@
         "direcao": "maior",
         "valor": 1.0,
         "absoluto": 1.0
+      },
+      "juiz_relacao_falhas": {
+        "direcao": "menor",
+        "valor": 1,
+        "limiar": 0
       }
     },
     "gravadaEm": "2026-10-04",

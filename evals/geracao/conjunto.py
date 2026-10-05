@@ -3,6 +3,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
+from app.carregador_prompts import obter as obter_prompt
 from app.casamento import termo_presente
 from app.fontes import fontes_da_geracao
 from app.generate import TETO_REQUISICOES, DiagnosticoGeracao, generate_cv_pipeline
@@ -210,9 +211,22 @@ def resumir(resultados: list[dict[str, Any]]) -> dict[str, Any]:
         "frases_descartadas": soma("frases_descartadas"),
         "juiz_requisito": media([1.0 if n["respondeRequisito"] else 0.0 for n in notas]),
         "juiz_relacao": media([1.0 if n["relacaoSustentada"] else 0.0 for n in notas]),
+        "juiz_relacao_falhas": sum(1 for n in notas if not n["relacaoSustentada"]),
         "juiz_sondas": media([1.0 if s["juiz"] == s["esperado"] else 0.0 for s in sondas]) if sondas else None,
     }
 
 
-def extras(_resultados: list[dict[str, Any]]) -> dict[str, Any]:
-    return {"tetoDeRequisicoesPorGeracao": TETO_REQUISICOES, "juizEmProducao": False}
+def extras(resultados: list[dict[str, Any]]) -> dict[str, Any]:
+    sem_relacao = [
+        {"caso": r["id"], "chave": n["chave"], "texto": n["texto"], "justificativa": n["justificativa"]}
+        for r in resultados
+        if not r.get("erro")
+        for n in r["detalhes"]["notasDoJuiz"]
+        if n["relacaoSustentada"] is False
+    ]
+    return {
+        "tetoDeRequisicoesPorGeracao": TETO_REQUISICOES,
+        "juizEmProducao": False,
+        "promptDaReescrita": obter_prompt("reescrita").rotulo,
+        "frasesComRelacaoNaoSustentada": sem_relacao,
+    }

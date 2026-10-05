@@ -30,6 +30,11 @@ class ConjuntoGeracaoFalsoTest(unittest.TestCase):
         self.assertEqual(1, metricas["frases_rejeitadas"])
         self.assertEqual(1, metricas["frases_reparadas"])
         self.assertEqual(1.0, metricas["juiz_sondas"])
+        self.assertEqual(1, metricas["juiz_relacao_falhas"])
+        self.assertEqual("reescrita.v3", resumo["promptDaReescrita"])
+        [falha] = resumo["frasesComRelacaoNaoSustentada"]
+        self.assertEqual("migracao_postgres_causalidade", falha["caso"])
+        self.assertIn("reduzindo", falha["texto"])
         self.assertGreater(resumo["uso"]["custoEstimadoUsd"], 0)
 
         caso = json.loads((self.saida / "migracao_postgres_causalidade.json").read_text(encoding="utf-8"))

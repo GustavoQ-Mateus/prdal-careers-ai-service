@@ -104,7 +104,7 @@ class PipelineEstruturadoTest(unittest.TestCase):
         with ComClienteFalso(resposta(limpa)) as cliente:
             resultado = generate_cv_pipeline(req_dev())
         self.assertEqual(1, len(cliente.requisicoes))
-        self.assertEqual("reescrita.v2", resultado.prompt_version)
+        self.assertEqual("reescrita.v3", resultado.prompt_version)
 
     def test_experiencia_sem_bullet_aceito_usa_as_realizacoes_e_todas_aparecem_em_ordem(self):
         so_erp = reescrita(

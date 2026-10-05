@@ -1,6 +1,6 @@
 ---
 id: reescrita
-versao: 2
+versao: 3
 ---
 
 # Reescrita de curriculo com fonte por frase
@@ -29,16 +29,39 @@ Manter apenas informacoes verdadeiras. Nao inventar metricas, datas, empresas, t
 - Se uma frase nao cabe em nenhuma fonte factual, nao escreva a frase. Menos itens verdadeiros valem mais do que um item a mais sem fonte.
 - Numeros so quando existirem na fonte citada, com a mesma unidade.
 
+## Relacao entre fatos
+
+Ter cada termo na fonte nao basta. Quando uma frase junta dois fatos da fonte, ela so pode afirmar entre eles a relacao que a propria fonte afirma.
+
+- Nao invente causa, resultado, meio, finalidade, ferramenta usada ou simultaneidade entre fatos que a fonte traz separados. Conectores como conduzindo, utilizando, usando, com, para, por meio de, reduzindo, aumentando, gracas a e o que resultou em afirmam uma relacao; so use quando a fonte disser a mesma coisa.
+- Fatos em linhas, frases ou projetos diferentes da fonte sao fatos separados, mesmo dentro da mesma experiencia.
+- Na duvida, dois fatos viram duas frases.
+
+Exemplos, com fontes que trazem os fatos separados:
+
+- Fonte: "Superei a meta trimestral de atendimento." e, em outra linha, "Atendi a fila de chamados de clientes corporativos."
+  - Errado: "Superei a meta trimestral de atendimento cuidando da fila de chamados de clientes corporativos."
+  - Certo: "Atendi a fila de chamados de clientes corporativos." e, em outro bullet, "Superei a meta trimestral de atendimento."
+- Fonte: "Mantive o servico de faturamento em Go." e, em outra linha, "Configurei o Redis do servico de login."
+  - Errado: "Mantive o servico de faturamento em Go, utilizando Redis como cache."
+  - Certo: "Mantive o servico de faturamento em Go." e "Configurei o Redis do servico de login."
+- Fonte: "Elaborei as escalas de plantao da equipe." e, em outra linha, "Ministrei treinamentos de biosseguranca para os tecnicos."
+  - Errado: "Elaborei as escalas de plantao da equipe, com treinamentos de biosseguranca para os tecnicos."
+  - Certo: duas frases, uma para cada fato.
+- Fonte: "Troquei o servidor de arquivos por armazenamento em nuvem." e, em outro projeto, "Reduzi o custo mensal de infraestrutura em 20%."
+  - Errado: "Troquei o servidor de arquivos por armazenamento em nuvem, reduzindo o custo mensal em 20%."
+  - Certo: duas frases, sem ligar a reducao a troca.
+
 ## Metodologia de redacao
 
 Titulo profissional: alinhado a vaga e sustentado pelo historico. Use a nomenclatura do perfil quando o titulo da vaga pedir algo que as fontes nao sustentam. Sem nome de empresa.
 
-Resumo profissional: frases que juntam as principais keywords da vaga sustentadas pelas fontes factuais. Cada frase cita fato concreto; proibido texto generico de RH sem fato.
+Resumo profissional: frases com as principais keywords da vaga sustentadas pelas fontes factuais, sem ligar fatos que a fonte traz separados. Cada frase cita fato concreto; proibido texto generico de RH sem fato.
 
 Bullets de experiencia:
 
 - Abra cada experiencia pelo bullet mais aderente a vaga e siga em ordem decrescente de relevancia.
-- Cada bullet comeca com verbo de acao, diz o que foi feito, o impacto real quando a fonte o registra e as tecnologias ou ferramentas por extenso. Essa e a estrutura da frase, nunca rotulo escrito no texto: jamais escreva as palavras resultado, ferramenta por extenso ou nome de etapa dentro do bullet.
+- Cada bullet comeca com verbo de acao, diz o que foi feito, o impacto real quando a fonte o registra e as tecnologias ou ferramentas por extenso. Impacto e ferramenta so entram ligados ao feito quando a fonte os liga. Essa e a estrutura da frase, nunca rotulo escrito no texto: jamais escreva as palavras resultado, ferramenta por extenso ou nome de etapa dentro do bullet.
 - Bullets substanciais, com contexto, ferramenta concreta e escala ou impacto quando existirem na fonte. Nunca uma linha generica que apenas liste tarefa.
 - Preserve a moldura de autoria: contribuicao de time continua colaborativa; autoria forte so quando estiver escrita na propria experiencia. Nunca intensifique o verbo da fonte: atuei, contribui ou participei nao viram desenvolvi, implementei, liderei ou construi.
 - Nao apague o bullet de maior responsabilidade registrada na experiencia.

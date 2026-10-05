@@ -32,6 +32,19 @@ class CarregadorPromptsTest(unittest.TestCase):
         for trecho in INSTRUCOES_DE_FERRAMENTA_LOCAL:
             self.assertNotIn(trecho, prompt.texto)
 
+    def test_reescrita_v3_proibe_relacao_inventada_entre_fatos_sem_copiar_o_conjunto(self):
+        prompt = carregar_prompts()["reescrita"]
+        self.assertEqual(3, prompt.versao)
+        self.assertFalse((carregador_prompts.DIRETORIO_PROMPTS / "reescrita.v2.md").exists())
+        self.assertIn("## Relacao entre fatos", prompt.texto)
+        self.assertIn("Na duvida, dois fatos viram duas frases.", prompt.texto)
+        for conector in ("conduzindo", "utilizando", "com, para", "por meio de", "reduzindo"):
+            self.assertIn(conector, prompt.texto)
+        self.assertGreaterEqual(prompt.texto.count("  - Errado:"), 3)
+        self.assertEqual(prompt.texto.count("  - Errado:"), prompt.texto.count("  - Certo:"))
+        for dado_do_conjunto in ("112%", "vendas consultivas", "FastAPI", "PostgreSQL", "JUnit", "MySQL", "pedidos"):
+            self.assertNotIn(dado_do_conjunto, prompt.texto)
+
     def test_sem_prompt_obrigatorio_o_carregamento_falha(self):
         with tempfile.TemporaryDirectory() as pasta:
             with self.assertRaises(PromptAusente):
