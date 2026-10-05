@@ -318,8 +318,30 @@ class EmbeddingConsultasRequest(CamelModel):
 class EmbeddingConsultasResponse(CamelModel):
     modelo: str
     dimensao: int
-    limiar: float
     vetores: list[list[float]]
+
+
+class TrechoCandidato(CamelModel):
+    id: str
+    texto: str
+
+
+class ConsultaComTrechos(CamelModel):
+    consulta: str
+    trechos: list[TrechoCandidato] = Field(max_length=50)
+
+
+class FiltroTrechosRequest(CamelModel):
+    consultas: list[ConsultaComTrechos] = Field(max_length=50)
+
+
+class TrechosAceitos(CamelModel):
+    consulta: str
+    aceitos: list[str]
+
+
+class FiltroTrechosResponse(CamelModel):
+    consultas: list[TrechosAceitos]
 
 
 class BlocoNativo(BaseModel):

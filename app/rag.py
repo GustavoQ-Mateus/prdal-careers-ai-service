@@ -5,7 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .schemas import ChunkComVetor, DocumentoParaEmbedding
+from .casamento import termo_presente
+from .schemas import ChunkComVetor, DocumentoParaEmbedding, TrechoCandidato
 
 TIPOS_EM_PARAGRAFOS = ("nota", "candidatura")
 TOKENS_ESPECIAIS = 2
@@ -23,7 +24,6 @@ class ModeloEmbedding:
     prefixo_consulta: str
     prefixo_documento: str
     molde_consulta: str
-    limiar: float
 
 
 MODELOS = {
@@ -35,7 +35,6 @@ MODELOS = {
             prefixo_consulta="query: ",
             prefixo_documento="passage: ",
             molde_consulta="experiência com {}",
-            limiar=0.864,
         ),
         ModeloEmbedding(
             nome="paraphrase-multilingual-MiniLM-L12-v2",
@@ -43,7 +42,6 @@ MODELOS = {
             prefixo_consulta="",
             prefixo_documento="",
             molde_consulta="experiencia com {}",
-            limiar=0.35,
         ),
     )
 }
@@ -62,7 +60,7 @@ def configuracao() -> ModeloEmbedding:
     nome = os.getenv("EMBED_MODEL", "").strip() or MODELO_PADRAO
     modelo = MODELOS.get(nome)
     if modelo is None:
-        raise ModeloDesconhecido(f"EMBED_MODEL {nome} nao tem prefixos nem limiar calibrados; use um de {sorted(MODELOS)}")
+        raise ModeloDesconhecido(f"EMBED_MODEL {nome} nao tem prefixos calibrados; use um de {sorted(MODELOS)}")
     return modelo
 
 
@@ -103,15 +101,6 @@ def limite_tokens() -> int:
 
 def contar_tokens(texto: str) -> int:
     return len(_model().tokenizer.tokenize(configuracao().prefixo_documento + texto)) + TOKENS_ESPECIAIS
-
-
-def limiar_similaridade() -> float:
-    padrao = configuracao().limiar
-    try:
-        valor = float(os.getenv("RAG_LIMIAR_SIMILARIDADE", str(padrao)))
-    except ValueError:
-        return padrao
-    return valor if -1.0 <= valor <= 1.0 else padrao
 
 
 def _pedacos(texto: str, limite: int, contar: Callable[[str], int]) -> list[str]:
@@ -192,3 +181,7 @@ def chunks_dos_documentos(
         ChunkComVetor(documento_id=doc.id, indice=indice, fonte_id=fonte_id, texto=texto, vetor=vetor)
         for (doc, indice, fonte_id, texto), vetor in zip(partes, vetores)
     ]
+
+
+def trechos_que_casam(consulta: str, trechos: list[TrechoCandidato]) -> list[str]:
+    return [trecho.id for trecho in trechos if termo_presente(consulta, trecho.texto)]

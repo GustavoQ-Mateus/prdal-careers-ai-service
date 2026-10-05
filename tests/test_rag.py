@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app import rag
 from app.main import app
-from app.schemas import DocumentoParaEmbedding
+from app.schemas import DocumentoParaEmbedding, TrechoCandidato
 
 
 def _contar_palavras(texto: str) -> int:
@@ -92,16 +92,6 @@ class ConfiguracaoTest(unittest.TestCase):
         with patch.dict(os.environ, {"EMBED_MODEL": "modelo-sem-calibracao"}), self.assertRaises(rag.ModeloDesconhecido):
             rag.configuracao()
 
-    def test_limiar_vem_do_modelo_e_o_ambiente_sobrepoe(self):
-        with patch.dict(os.environ, {"EMBED_MODEL": "intfloat/multilingual-e5-small"}):
-            os.environ.pop("RAG_LIMIAR_SIMILARIDADE", None)
-            self.assertEqual(rag.limiar_similaridade(), 0.864)
-            with patch.dict(os.environ, {"RAG_LIMIAR_SIMILARIDADE": "0.9"}):
-                self.assertEqual(rag.limiar_similaridade(), 0.9)
-            for invalido in ("muito", "7"):
-                with patch.dict(os.environ, {"RAG_LIMIAR_SIMILARIDADE": invalido}):
-                    self.assertEqual(rag.limiar_similaridade(), 0.864)
-
     def test_dimensao_diferente_da_do_banco_derruba_o_boot(self):
         modelo = SimpleNamespace(get_embedding_dimension=lambda: 768)
         with patch.object(rag, "_model", return_value=modelo), patch.dict(os.environ, {"EMBED_MODEL": "intfloat/multilingual-e5-small", "EMBED_DIMENSAO": "384"}):
@@ -115,11 +105,41 @@ class ConfiguracaoTest(unittest.TestCase):
             rag.conferir_dimensao()
 
 
+class FiltroTest(unittest.TestCase):
+    def setUp(self):
+        self.cliente = TestClient(app)
+
+    def trechos(self, *pares):
+        return [TrechoCandidato(id=id_, texto=texto) for id_, texto in pares]
+
+    def test_so_passa_o_trecho_que_casa_a_keyword_inclusive_por_sinonimo(self):
+        trechos = self.trechos(
+            ("literal", "Operei um cluster Kubernetes com Helm."),
+            ("sinonimo", "Subi os servicos no k8s do time."),
+            ("parecido", "Orquestrei conteineres com rollouts graduais."),
+        )
+        self.assertEqual(rag.trechos_que_casam("Kubernetes", trechos), ["literal", "sinonimo"])
+
+    def test_termo_ausente_ou_trecho_vazio_nao_passa(self):
+        trechos = self.trechos(("vazio", ""), ("outro", "Montei planilhas com tabelas dinamicas."))
+        self.assertEqual(rag.trechos_que_casam("Excel", trechos), [])
+        self.assertEqual(rag.trechos_que_casam("", self.trechos(("a", "Excel"))), [])
+
+    def test_rota_filtra_cada_consulta_sem_carregar_o_modelo(self):
+        with patch.object(rag, "_model", side_effect=AssertionError("nao deve carregar o modelo")):
+            resposta = self.cliente.post("/rag/filtrar", json={"consultas": [
+                {"consulta": "Excel", "trechos": [{"id": "n1", "texto": "Planilhas em Excel."}, {"id": "n2", "texto": "Livro de receitas."}]},
+                {"consulta": "Node.js", "trechos": [{"id": "n3", "texto": "APIs em NodeJS."}, {"id": "n4", "texto": ""}]},
+            ]})
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json(), {"consultas": [{"consulta": "Excel", "aceitos": ["n1"]}, {"consulta": "Node.js", "aceitos": ["n3"]}]})
+
+
 class RotasTest(unittest.TestCase):
     def setUp(self):
         self.cliente = TestClient(app)
 
-    def test_rotas_devolvem_modelo_dimensao_e_limiar(self):
+    def test_rotas_devolvem_modelo_e_dimensao_sem_limiar(self):
         with patch.object(rag, "_vetores", side_effect=lambda textos: [[0.5] * 384 for _ in textos]), patch.dict(os.environ, {"EMBED_MODEL": ""}):
             docs = self.cliente.post("/embeddings/documentos", json={"documentos": [{"id": "d1", "origemId": "exp-a", "tipo": "experiencia", "texto": "SQL"}]})
             consultas = self.cliente.post("/embeddings/consultas", json={"consultas": ["SQL", "Power BI"]})
@@ -129,7 +149,7 @@ class RotasTest(unittest.TestCase):
         self.assertEqual(corpo["chunks"][0]["documentoId"], "d1")
         self.assertEqual(corpo["chunks"][0]["fonteId"], "exp-a")
         self.assertEqual(len(consultas.json()["vetores"]), 2)
-        self.assertEqual(consultas.json()["limiar"], 0.864)
+        self.assertNotIn("limiar", consultas.json())
 
     def test_modelo_fora_responde_503(self):
         with patch.object(rag, "_vetores", side_effect=OSError("sem modelo")):

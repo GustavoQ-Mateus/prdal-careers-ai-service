@@ -67,6 +67,8 @@ from .schemas import (
     EmbeddingConsultasResponse,
     EmbeddingDocumentosRequest,
     EmbeddingDocumentosResponse,
+    FiltroTrechosRequest,
+    FiltroTrechosResponse,
     KeywordsRequest,
     KeywordsResponse,
     ReduzirCvRequest,
@@ -77,6 +79,7 @@ from .schemas import (
     ScoreRequest,
     ScoreResponse,
     TaxonomiaResponse,
+    TrechosAceitos,
     TurnRequest,
     TurnResponse,
     UsoLlm,
@@ -292,8 +295,16 @@ def embeddings_consultas(req: EmbeddingConsultasRequest) -> EmbeddingConsultasRe
         vetores = rag.vetores_de_consultas(req.consultas)
     except Exception as exc:
         raise _embedding_indisponivel(exc) from exc
-    return EmbeddingConsultasResponse(
-        modelo=modelo.nome, dimensao=modelo.dimensao, limiar=rag.limiar_similaridade(), vetores=vetores
+    return EmbeddingConsultasResponse(modelo=modelo.nome, dimensao=modelo.dimensao, vetores=vetores)
+
+
+@app.post("/rag/filtrar", response_model=FiltroTrechosResponse)
+def rag_filtrar(req: FiltroTrechosRequest) -> FiltroTrechosResponse:
+    return FiltroTrechosResponse(
+        consultas=[
+            TrechosAceitos(consulta=item.consulta, aceitos=rag.trechos_que_casam(item.consulta, item.trechos))
+            for item in req.consultas
+        ]
     )
 
 
