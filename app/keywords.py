@@ -1,7 +1,7 @@
 import re
 import unicodedata
 
-from .llm import LLMUnavailable, ValidacaoSemantica, complete_model
+from .llm import LLMUnavailable, ValidacaoSemantica, complete_model, modelo_configurado, montar_requisicao, MAX_TOKENS_PADRAO, _env_int
 from .schemas import Keyword, KeywordsLlmResponse
 
 ESFORCO = "low"
@@ -75,3 +75,23 @@ def extract_keywords(descricao: str) -> list[Keyword]:
     if not keywords:
         raise LLMUnavailable("extracao de keywords retornou lista vazia")
     return keywords
+
+
+def preparar_lote(descricao: str) -> dict:
+    modelo = modelo_configurado()
+    if not modelo:
+        raise LLMUnavailable("AI_MODEL ausente")
+    return montar_requisicao(modelo, SYSTEM, _user(descricao), KeywordsLlmResponse, ESFORCO, _env_int("AI_MAX_TOKENS", MAX_TOKENS_PADRAO))
+
+
+def interpretar_lote(resposta: dict) -> list[Keyword]:
+    if resposta.get("stop_reason") != "end_turn":
+        raise ValueError("resposta de keywords incompleta")
+    texto = "".join(bloco.get("text", "") for bloco in resposta.get("content", []) if bloco.get("type") == "text")
+    resultado = KeywordsLlmResponse.model_validate_json(texto)
+    _exigir_keyword_valida(resultado)
+    return [
+        Keyword(termo=item.termo.strip(), peso=item.peso, tipo=item.tipo)
+        for item in resultado.keywords
+        if _validar_keyword(item)
+    ]

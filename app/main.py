@@ -26,7 +26,7 @@ from .generate import (
     generate_cv_pipeline,
     reduzir_curriculo,
 )
-from .keywords import extract_keywords
+from .keywords import extract_keywords, preparar_lote, interpretar_lote
 from .observabilidade import (
     MENSAGEM_DESLIGAMENTO,
     avisar_desligamento,
@@ -188,6 +188,51 @@ def keywords(req: KeywordsRequest, request: Request) -> KeywordsResponse:
                 ),
                 op,
             )
+
+
+class VagaLote(BaseModel):
+    id: str
+    descricao: str
+
+
+class PrepararLoteRequest(BaseModel):
+    vagas: list[VagaLote]
+
+
+class ResultadoLote(BaseModel):
+    id: str
+    resposta: dict | None = None
+    erro: str | None = None
+
+
+class InterpretarLoteRequest(BaseModel):
+    resultados: list[ResultadoLote]
+
+
+@app.post("/keywords/lote/preparar")
+def preparar_keywords_lote(req: PrepararLoteRequest) -> dict:
+    pedidos = []
+    erros = []
+    for vaga in req.vagas:
+        try:
+            pedidos.append({"id": vaga.id, "params": preparar_lote(vaga.descricao)})
+        except Exception as exc:
+            erros.append({"id": vaga.id, "erro": str(exc)[:500]})
+    return {"pedidos": pedidos, "erros": erros}
+
+
+@app.post("/keywords/lote/interpretar")
+def interpretar_keywords_lote(req: InterpretarLoteRequest) -> dict:
+    itens = []
+    for item in req.resultados:
+        try:
+            if item.erro or item.resposta is None:
+                raise ValueError(item.erro or "resposta ausente")
+            keywords = interpretar_lote(item.resposta)
+            itens.append({"id": item.id, "status": "VALIDAS", "keywords": [kw.model_dump() for kw in keywords], "erro": None})
+        except Exception as exc:
+            itens.append({"id": item.id, "status": "PENDENTE", "keywords": [], "erro": str(exc)[:500]})
+    return {"itens": itens}
 
 
 @app.post("/generate-cv", response_model=GenerateCvResponse)
