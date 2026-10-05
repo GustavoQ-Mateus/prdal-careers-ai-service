@@ -6,7 +6,7 @@ from starlette.responses import JSONResponse
 
 HEADER_SERVICO = "X-Prdal-Servico"
 TAMANHO_MINIMO_TOKEN = 32
-ROTAS_PUBLICAS = frozenset({"/health"})
+ROTAS_PUBLICAS = frozenset({"/health", "/ready"})
 
 
 class TokenServicoAusente(RuntimeError):

@@ -29,6 +29,7 @@ from .generate import (
     reduzir_curriculo,
 )
 from .keywords import extract_keywords
+from .prontidao import prontidao
 from . import telemetria
 from .degradacao import Degradacao
 from .llm import (
@@ -167,6 +168,12 @@ class HelloResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    pronto, corpo = prontidao()
+    return JSONResponse(status_code=200 if pronto else 503, content=corpo)
 
 
 @app.get("/hello", response_model=HelloResponse)
