@@ -1,6 +1,6 @@
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from . import degradacao as deg
 from . import juiz_relacao
@@ -15,7 +15,7 @@ from .estrutura import (
     titulo_do_perfil,
 )
 from .fontes import Fonte, fontes_da_geracao
-from .llm import LLMUnavailable, PrazoEsgotado, complete_model, teto_de_requisicoes
+from .llm import LLMUnavailable, PrazoEsgotado, TetoDeRequisicoes, complete_model, teto_de_requisicoes
 from .orcamento import bullets_maximos, texto_orcamento
 from .renderizador import (
     experiencias_por_recencia,
@@ -35,6 +35,11 @@ from .schemas import (
     ReduzirCvRequest,
     ReescritaEstruturada,
     TermoFonte,
+    VerificarGeracaoRequest,
+    RepararGeracaoRequest,
+    MontarGeracaoRequest,
+    VerificacaoGeracaoResponse,
+    ReparoGeracaoResponse,
 )
 from .score import calcular_score
 from .verificacao import (
@@ -423,6 +428,119 @@ def _contexto(req: GenerateCvRequest) -> _Contexto:
         fontes=fontes_da_geracao(req),
         termos=termos_reconhecidos(req),
         idioma=idioma_da_vaga(req.vaga),
+    )
+
+
+def rascunho_geracao(req: GenerateCvRequest) -> ReescritaEstruturada:
+    _exigir_keywords(req, "gerar o curriculo")
+    ctx = _contexto(req)
+    return complete_model(
+        _system_prompt(), _user(req, ctx.fontes, ctx.idioma), ReescritaEstruturada,
+        chamador="reescrita", esforco=ESFORCO_REESCRITA, prompt_version=_prompt_version(),
+    )
+
+
+def _restaurar(estado: dict) -> _Rascunho:
+    def frase(valor):
+        return FraseFonte.model_validate(valor) if valor else None
+
+    return _Rascunho(
+        titulo=frase(estado.get("titulo")),
+        resumo=[frase(item) for item in estado.get("resumo", [])],
+        bullets={chave: [frase(item) for item in itens] for chave, itens in estado.get("bullets", {}).items()},
+        competencias=[CategoriaCompetencias.model_validate(item) for item in estado.get("competencias", [])],
+        rejeitadas=[Rejeicao(**item) for item in estado.get("rejeitadas", [])],
+        locais={chave: _Local(**item) for chave, item in estado.get("locais", {}).items()},
+        descartadas=[Rejeicao(**item) for item in estado.get("descartadas", [])],
+    )
+
+
+def _serializar(rascunho: _Rascunho) -> dict:
+    def frase(valor):
+        return valor.model_dump(by_alias=True) if valor else None
+
+    return {
+        "titulo": frase(rascunho.titulo),
+        "resumo": [frase(item) for item in rascunho.resumo],
+        "bullets": {chave: [frase(item) for item in itens] for chave, itens in rascunho.bullets.items()},
+        "competencias": [item.model_dump(by_alias=True) for item in rascunho.competencias],
+        "rejeitadas": [asdict(item) for item in rascunho.rejeitadas],
+        "locais": {chave: asdict(item) for chave, item in rascunho.locais.items()},
+        "descartadas": [asdict(item) for item in rascunho.descartadas],
+    }
+
+
+def verificar_geracao(req: VerificarGeracaoRequest) -> VerificacaoGeracaoResponse:
+    _exigir_keywords(req, "verificar o curriculo")
+    ctx = _contexto(req)
+    rascunho = _restaurar(req.estado) if req.estado is not None else _verificar(req.rascunho, ctx)
+    chaves = list(rascunho.locais) if req.estado is None else []
+    if req.estado is not None:
+        pendentes = {item.chave: item for item in rascunho.rejeitadas}
+        rascunho.rejeitadas = []
+        respondidas = set()
+        for item in req.reparos:
+            chave = item.chave.strip()
+            if chave not in pendentes or chave in respondidas:
+                continue
+            respondidas.add(chave)
+            local = rascunho.locais[chave]
+            aceita, rejeicao = _checar(ctx, chave, FraseFonte(texto=item.texto, fontes=item.fontes), local)
+            _posicionar(rascunho, local, aceita)
+            if rejeicao:
+                rascunho.rejeitadas.append(rejeicao)
+            elif aceita:
+                chaves.append(chave)
+        rascunho.descartadas.extend(item for chave, item in pendentes.items() if chave not in respondidas)
+    juiz = "desligado"
+    if juiz_relacao.ligado() and req.chamadas_restantes > 0 and chaves:
+        with teto_de_requisicoes(1):
+            reprovadas = _julgar_relacao(rascunho, ctx, chaves)
+        juiz = "ligado" if reprovadas is not None else "indisponivel"
+        rascunho.rejeitadas.extend(reprovadas or [])
+    return VerificacaoGeracaoResponse(
+        estado=_serializar(rascunho), rejeitadas=[asdict(item) for item in rascunho.rejeitadas], juiz=juiz,
+    )
+
+
+def reparar_geracao(req: RepararGeracaoRequest) -> ReparoGeracaoResponse:
+    rascunho = _restaurar(req.estado)
+    if not rascunho.rejeitadas:
+        return ReparoGeracaoResponse(reparos=[])
+    ctx = _contexto(req)
+    try:
+        with teto_de_requisicoes(min(req.chamadas_restantes, 1)):
+            resposta = complete_model(
+                _system_prompt(), _user_reparo(rascunho, ctx), ReescritaEstruturada,
+                chamador="reescrita", esforco=ESFORCO_REESCRITA, prompt_version=_prompt_version(),
+            )
+    except TetoDeRequisicoes as exc:
+        raise LLMUnavailable("resposta invalida apos reparo") from exc
+    return ReparoGeracaoResponse(reparos=resposta.reparos)
+
+
+def montar_geracao(req: MontarGeracaoRequest) -> GeneratePipelineResponse:
+    _exigir_keywords(req, "montar o curriculo")
+    ctx = _contexto(req)
+    base = estrutura_do_perfil(req, ctx.fontes, ctx.idioma)
+    inicial = _analise(renderizar(req.perfil_mestre, base, ctx.idioma), req)
+    if req.estado is None:
+        estrutura = base
+        degradacao = req.degradacao
+    else:
+        rascunho = _restaurar(req.estado)
+        rascunho.descartadas.extend(rascunho.rejeitadas)
+        estrutura, aceitou = _montar(rascunho, ctx)
+        degradacao = req.degradacao
+        if not aceitou:
+            motivos = "; ".join(f"{r.chave}: {r.motivo}" for r in rascunho.descartadas) or "resposta sem frases"
+            degradacao = deg.registrar(deg.REESCRITA_REJEITADA, motivos)
+            estrutura = base
+    markdown = renderizar(req.perfil_mestre, estrutura, ctx.idioma)
+    return GeneratePipelineResponse(
+        markdown=markdown, estrutura=estrutura, analise_inicial=inicial,
+        analise_final=_analise(markdown, req), degradacao=degradacao,
+        prompt_version=_prompt_version(),
     )
 
 

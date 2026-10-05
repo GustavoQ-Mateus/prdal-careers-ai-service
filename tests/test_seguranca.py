@@ -52,7 +52,7 @@ class ServicoAutenticadoTest(unittest.TestCase):
         self.assertEqual(vetores.call_count, 2)
 
     def test_geracao_tambem_exige_header(self, _vetores):
-        for rota in ("/generate-cv-pipeline", "/copiloto/turn", "/keywords"):
+        for rota in ("/geracao/rascunho", "/copiloto/turn", "/keywords"):
             resposta = self.cliente.post(rota, json={})
             self.assertEqual(resposta.status_code, 401, rota)
 

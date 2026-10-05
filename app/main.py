@@ -23,9 +23,9 @@ from .generate import (
     KeywordsUnavailable,
     analisar_ats,
     generate_cv,
-    generate_cv_pipeline,
     reduzir_curriculo,
 )
+from .passos import executar as executar_passo
 from .keywords import extract_keywords
 from .observabilidade import (
     MENSAGEM_DESLIGAMENTO,
@@ -199,13 +199,21 @@ def generate(req: GenerateCvRequest, request: Request) -> GenerateCvResponse:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@app.post("/generate-cv-pipeline", response_model=GeneratePipelineResponse)
-def generate_pipeline(req: GenerateCvRequest, request: Request) -> GeneratePipelineResponse:
-    with _operacao_llm(request) as op:
-        try:
-            return _com_uso(generate_cv_pipeline(req), op)
-        except KeywordsUnavailable as exc:
+@app.post("/geracao/{passo}")
+def geracao_passo(passo: str, dados: dict, request: Request) -> dict:
+    if passo not in {"rascunho", "verificar", "reparar", "montar"}:
+        raise HTTPException(status_code=404, detail="passo desconhecido")
+    try:
+        return executar_passo(
+            passo, dados, _prazo_ms(request.headers.get(HEADER_PRAZO)),
+            request.headers.get(HEADER_OPERACAO),
+        )
+    except KeywordsUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except LLMUnavailable as exc:
+        if "resposta invalida apos reparo" in str(exc):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/reduzir-curriculo", response_model=GeneratePipelineResponse)
