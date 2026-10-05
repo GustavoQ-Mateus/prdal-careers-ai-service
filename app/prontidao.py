@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -7,8 +8,11 @@ import httpx
 from . import rag
 from .carregador_prompts import PROMPTS_OBRIGATORIOS, PromptAusente, obter
 from .llm import _credencial_presente, modelo_configurado
+from .observabilidade import request_id_atual
 
 PRAZO_PADRAO_S = 2.0
+
+logger = logging.getLogger("prdal.prontidao")
 
 
 @dataclass(frozen=True)
@@ -19,7 +23,7 @@ class SituacaoDependencia:
     detalhe: str | None = None
 
     def como_dict(self) -> dict[str, object]:
-        return {chave: valor for chave, valor in asdict(self).items() if valor is not None}
+        return {chave: valor for chave, valor in asdict(self).items() if chave != "detalhe"}
 
 
 def _prazo_s() -> float:
@@ -71,6 +75,18 @@ def prontidao() -> tuple[bool, dict[str, object]]:
         _verificar("embeddings", False, _embeddings),
     ]
     pronto = all(d.estado == "ok" for d in dependencias if d.obrigatoria)
+    for d in dependencias:
+        if d.estado != "ok":
+            logger.warning(
+                "dependencia fora",
+                extra={
+                    "requestId": request_id_atual(),
+                    "dependencia": d.nome,
+                    "obrigatoria": d.obrigatoria,
+                    "estado": d.estado,
+                    "detalhe": d.detalhe,
+                },
+            )
     return pronto, {
         "servico": "ai-service",
         "status": "pronto" if pronto else "indisponivel",

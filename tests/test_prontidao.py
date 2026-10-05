@@ -30,7 +30,14 @@ class ProntidaoTest(unittest.TestCase):
         self.cliente = TestClient(app)
 
     def _dependencias(self, resposta):
+        for d in resposta.json()["dependencias"]:
+            self.assertEqual(["nome", "obrigatoria", "estado"], list(d))
         return {d["nome"]: d for d in resposta.json()["dependencias"]}
+
+    def _motivos(self, chamar):
+        with self.assertLogs("prdal.prontidao", "WARNING") as capturados:
+            resposta = chamar()
+        return resposta, {r.dependencia: r for r in capturados.records}
 
     def test_tudo_no_ar_responde_pronto_sem_token_de_servico(self):
         with patch("app.prontidao.httpx.get", side_effect=_chroma_ok), patch("app.prontidao.rag._model", _modelo(True)):
@@ -45,21 +52,29 @@ class ProntidaoTest(unittest.TestCase):
 
     def test_chroma_fora_e_opcional_e_aparece_indisponivel(self):
         with patch("app.prontidao.httpx.get", side_effect=_chroma_fora), patch("app.prontidao.rag._model", _modelo(False)):
-            resposta = self.cliente.get("/ready")
+            resposta, motivos = self._motivos(lambda: self.cliente.get("/ready", headers={"X-Request-Id": "req-ready"}))
         self.assertEqual(200, resposta.status_code)
         deps = self._dependencias(resposta)
         self.assertEqual("indisponivel", deps["chroma"]["estado"])
-        self.assertIn("conexao recusada", deps["chroma"]["detalhe"])
+        self.assertIn("conexao recusada", motivos["chroma"].detalhe)
+        self.assertNotIn("conexao recusada", resposta.text)
+        from app.observabilidade import FormatadorJson
+        import json
+
+        linha = json.loads(FormatadorJson().format(motivos["chroma"]))
+        self.assertEqual("req-ready", linha["requestId"])
+        self.assertEqual("chroma", linha["dependencia"])
         self.assertEqual("indisponivel", deps["embeddings"]["estado"])
 
     def test_sem_credencial_do_claude_responde_503(self):
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": ""}), patch(
             "app.prontidao.httpx.get", side_effect=_chroma_ok
         ), patch("app.prontidao.rag._model", _modelo(True)):
-            resposta = self.cliente.get("/ready")
+            resposta, motivos = self._motivos(lambda: self.cliente.get("/ready"))
         self.assertEqual(503, resposta.status_code)
         self.assertEqual("indisponivel", resposta.json()["status"])
-        self.assertEqual("ANTHROPIC_API_KEY ausente", self._dependencias(resposta)["claude"]["detalhe"])
+        self.assertEqual("indisponivel", self._dependencias(resposta)["claude"]["estado"])
+        self.assertEqual("ANTHROPIC_API_KEY ausente", motivos["claude"].detalhe)
 
     def test_health_so_diz_que_o_processo_esta_vivo(self):
         with patch("app.prontidao.httpx.get", side_effect=_chroma_fora):
