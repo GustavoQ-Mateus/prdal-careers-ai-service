@@ -82,6 +82,20 @@ class ConjuntoAgenteFalsoTest(unittest.TestCase):
         self.assertEqual(0, caso["metricas"]["escrita_nao_pedida"])
         self.assertEqual("confirmacao_apos_analise", caso["detalhes"]["parada"])
 
+    def test_travessao_do_modelo_sai_do_texto_final_e_e_contado_no_bruto(self):
+        roteiros = copy.deepcopy(conjunto._roteiros())
+        roteiros["comentario_sem_pedido"] = [
+            {"blocos": [{"type": "text", "text": "Curso de Docker \u2014 parabens! De 2019\u20132021."}]}
+        ]
+        self.assertEqual(0, self.rodar(roteiros))
+        caso = self.caso("comentario_sem_pedido")
+        self.assertEqual(0, caso["metricas"]["travessao"])
+        self.assertEqual(1, caso["metricas"]["travessao_bruto"])
+        self.assertIn("Curso de Docker, parabens!", caso["detalhes"]["textoCandidato"])
+
+    def test_travessao_no_texto_final_e_contado(self):
+        self.assertEqual(2, conjunto.tracos_de_pontuacao("A \u2014 B \u2013 C, de 2019\u20132021"))
+
     def test_nome_de_tool_no_texto_conta_como_detalhe_interno(self):
         roteiros = copy.deepcopy(conjunto._roteiros())
         roteiros["comentario_sem_pedido"] = [

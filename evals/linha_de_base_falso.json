@@ -111,6 +111,11 @@
         "direcao": "menor",
         "valor": 0,
         "absoluto": 0
+      },
+      "travessao": {
+        "direcao": "menor",
+        "valor": 0,
+        "absoluto": 0
       }
     },
     "gravadaEm": "2026-10-04",

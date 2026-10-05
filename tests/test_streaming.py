@@ -9,7 +9,7 @@ import anthropic
 import httpx
 from fastapi.testclient import TestClient
 
-from app.copiloto import SanitizadorDeStream, _nomes_protegidos, _texto_para_candidato, planejar_turno_em_stream
+from app.copiloto import SYSTEM_TURNO, SanitizadorDeStream, _nomes_protegidos, _texto_para_candidato, planejar_turno_em_stream
 from app.llm import LLMUnavailable, OperacaoCancelada, StreamInterrompido, operacao
 from app.main import app
 from app.schemas import TurnRequest
@@ -49,7 +49,7 @@ class SanitizadorDeStreamTest(unittest.TestCase):
         saida = []
         sanitizador = SanitizadorDeStream(saida.append, _nomes_protegidos(None))
         sanitizador.delta("Vou consultar com ler_")
-        self.assertEqual(["Vou consultar com "], saida)
+        self.assertEqual(["Vou consultar com"], saida)
         sanitizador.delta("perfil e depois buscar_curr")
         sanitizador.delta("iculo, sem JSON.")
         sanitizador.finalizar()
@@ -71,6 +71,8 @@ class SanitizadorDeStreamTest(unittest.TestCase):
             "Use ler_perfil, depois analisar_ats e POST /oportunidades/1/gerar-cv; JSON e tools ficam.",
             "registrar_nota registrar_notas xregistrar_nota GET\n/x DELETE /a/b?c=1 fim",
             "Etapa 1: ler o perfil. gerar_curriculo! status_geracao? PUT  /y",
+            "Fiz o curso de Docker \u2014 foi puxado. De 2019\u20132021 e 10 \u2013 20 vagas; full-stack \u2013 fim \u2014",
+            "\u2014 item um\n\u2014 item dois \u2014 ler_perfil \u2014, e bem\u2014feito.",
         ]
         aleatorio = random.Random(7)
         for texto in textos:
@@ -79,6 +81,37 @@ class SanitizadorDeStreamTest(unittest.TestCase):
                 cortes = aleatorio.sample(range(1, len(texto)), aleatorio.randint(1, min(12, len(texto) - 1)))
                 self.assertEqual(esperado, "".join(sanitizar_em_partes(texto, cortes)), cortes)
             self.assertEqual(esperado, "".join(sanitizar_em_partes(texto, range(1, len(texto)))))
+
+
+class TravessaoTest(unittest.TestCase):
+    def test_travessao_vira_virgula_sem_tocar_hifen_nem_intervalo(self):
+        casos = {
+            "Terminei o curso de Docker \u2014 foi bem puxado.": "Terminei o curso de Docker, foi bem puxado.",
+            "A vaga \u2013 de Python \u2013 pede SQL.": "A vaga, de Python, pede SQL.",
+            "Atuei de 2019\u20132021 com 10 \u2013 20 pessoas.": "Atuei de 2019\u20132021 com 10 \u2013 20 pessoas.",
+            "Perfil full-stack e back-end.": "Perfil full-stack e back-end.",
+            "\u2014 primeiro\n\u2014 segundo": "- primeiro\n- segundo",
+            "Pronto \u2014.": "Pronto.",
+            "Pronto \u2014": "Pronto",
+        }
+        for texto, esperado in casos.items():
+            self.assertEqual(esperado, _texto_para_candidato(texto), texto)
+
+    def test_travessao_partido_entre_deltas_sai_igual_ao_texto_inteiro(self):
+        texto = "Curso de Docker \u2014 foi puxado, de 2019\u20132021."
+        for corte in range(1, len(texto)):
+            self.assertEqual(_texto_para_candidato(texto), "".join(sanitizar_em_partes(texto, [corte])), corte)
+
+    def test_turno_entrega_texto_final_sem_travessao(self):
+        final = resposta_blocos([{"type": "text", "text": "Curso de Docker \u2014 parabens!"}])
+        emitidos = []
+        with ComClienteFalso(StreamFalso(["Curso de Docker ", "\u2014", " parabens!"], final)):
+            res = planejar_turno_em_stream(turno(), emitidos.append)
+        self.assertEqual("Curso de Docker, parabens!", "".join(emitidos))
+        self.assertEqual("Curso de Docker, parabens!", res.conteudo[0]["text"])
+
+    def test_system_do_turno_pede_para_nao_usar_travessao(self):
+        self.assertIn("Nao use travessao nem meia-risca", SYSTEM_TURNO)
 
 
 class TurnoEmStreamTest(unittest.TestCase):
@@ -131,7 +164,7 @@ class TurnoEmStreamTest(unittest.TestCase):
                 with self.assertRaises(StreamInterrompido):
                     planejar_turno_em_stream(turno(), emitidos.append)
         self.assertEqual(1, len(cliente.requisicoes))
-        self.assertEqual(["Comecei "], emitidos)
+        self.assertEqual(["Comecei"], emitidos)
         self.assertEqual(321, op.uso.entrada)
 
     def test_prazo_esgotado_no_meio_encerra_o_stream(self):

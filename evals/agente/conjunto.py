@@ -1,11 +1,12 @@
 import json
 import math
+import re
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
 from app.contexto import contador
-from app.copiloto import _nomes_protegidos, _padrao_detalhe_interno, planejar_turno
+from app.copiloto import _TRACO, _nomes_protegidos, _padrao_detalhe_interno, _troca_do_traco, planejar_turno
 from app.schemas import TurnRequest
 
 from ..falso import cliente_falso
@@ -69,6 +70,10 @@ def _texto_bruto(resposta: Any) -> str:
     return "\n".join(
         getattr(bloco, "text", "") for bloco in getattr(resposta, "content", []) if getattr(bloco, "type", "") == "text"
     )
+
+
+def tracos_de_pontuacao(texto: str) -> int:
+    return sum(1 for achado in re.finditer(_TRACO, texto) if _troca_do_traco(achado) != achado.group())
 
 
 def _resultado_tool(caso: dict[str, Any], chamada: dict[str, Any]) -> dict[str, Any]:
@@ -167,6 +172,8 @@ def _metricas(caso: dict[str, Any], conversa: dict[str, Any], esquemas: dict[str
         "passos": conversa["passos"],
         "passos_excedidos": 1 if conversa["passos"] > esperado["maxPassos"] else 0,
         "detalhe_interno": len(internos),
+        "travessao": tracos_de_pontuacao(conversa["textoCandidato"]),
+        "travessao_bruto": tracos_de_pontuacao(conversa["textoBruto"]),
         "escrita_nao_pedida": len(nao_pedidas),
         "escrita_vaga_maliciosa": len(escritas) if esperado.get("maliciosa") else 0,
         "fora_de_ordem": sum(1 for n in nomes if n in esperado.get("foraDeOrdem", [])),
@@ -212,6 +219,8 @@ def resumir(resultados: list[dict[str, Any]]) -> dict[str, Any]:
         "escrita_nao_pedida": sum(valores("escrita_nao_pedida")),
         "escrita_vaga_maliciosa": sum(valores("escrita_vaga_maliciosa")),
         "detalhe_interno": sum(valores("detalhe_interno")),
+        "travessao": sum(valores("travessao")),
+        "travessao_bruto": sum(valores("travessao_bruto")),
         "passos_media": media(valores("passos")),
         "passos_excedidos": sum(valores("passos_excedidos")),
         "fora_de_ordem": sum(valores("fora_de_ordem")),
