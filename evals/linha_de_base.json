@@ -139,7 +139,7 @@
         "absoluto": 0
       }
     },
-    "gravadaEm": "2026-10-04",
-    "modelo": "paraphrase-multilingual-MiniLM-L12-v2"
+    "gravadaEm": "2026-10-05",
+    "modelo": "intfloat/multilingual-e5-small"
   }
 }
