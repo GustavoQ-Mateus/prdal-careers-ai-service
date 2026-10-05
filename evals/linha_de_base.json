@@ -130,15 +130,21 @@
     "metricas": {
       "recall_at_5": {
         "direcao": "maior",
-        "valor": 0.7188,
-        "limiar": 0.05
+        "valor": 0.6132,
+        "limiar": 0
       },
-      "sem_relacao_acima_do_limiar": {
+      "recall_at_5_antigas": {
+        "direcao": "maior",
+        "valor": 0.6562,
+        "limiar": 0
+      },
+      "sem_relacao_no_contexto": {
         "direcao": "menor",
         "valor": 0,
         "absoluto": 0
       }
     },
+    "nota": "portão por casamento de termos; similaridade só ordena",
     "gravadaEm": "2026-10-05",
     "modelo": "intfloat/multilingual-e5-small"
   }

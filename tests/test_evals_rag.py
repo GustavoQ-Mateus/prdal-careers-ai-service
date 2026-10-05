@@ -25,28 +25,26 @@ class ConjuntoRagFalsoTest(unittest.TestCase):
     def resumo(self):
         return json.loads((self.saida / "resumo.json").read_text(encoding="utf-8"))
 
-    def test_executor_passa_sem_chave_e_traz_a_calibracao_do_limiar(self):
+    def test_executor_passa_sem_chave_e_so_o_trecho_que_casa_a_keyword_entra(self):
         self.assertEqual(0, self.rodar())
         resumo = self.resumo()
-        self.assertEqual(0, resumo["metricas"]["sem_relacao_acima_do_limiar"])
-        self.assertEqual(31, resumo["metricas"]["consultas"])
+        self.assertEqual(0, resumo["metricas"]["sem_relacao_no_contexto"])
+        self.assertEqual(83, resumo["metricas"]["consultas"])
+        self.assertEqual(0.6562, resumo["metricas"]["recall_at_5_antigas"])
         self.assertEqual(0, resumo["uso"]["requisicoes"])
-        calibracao = resumo["calibracaoDoLimiar"]
-        self.assertEqual(0.35, calibracao["limiarAtual"]["limiar"])
-        self.assertEqual(7, len(calibracao["varredura"]))
-        self.assertIn("Excel -> n-planilhas (0.2873)", calibracao["positivosAbaixoDoLimiarAtual"])
+        self.assertIn("Excel -> n-planilhas", " ".join(resumo["esperadosForaDoContexto"]))
         caso = json.loads((self.saida / "corpus_variado.json").read_text(encoding="utf-8"))
         kubernetes = next(c for c in caso["detalhes"]["consultas"] if c["termo"] == "Kubernetes")
-        self.assertIn("n-k8s#1", kubernetes["acimaDoLimiar"])
-        self.assertNotIn("n-k8s#2", kubernetes["esperados"])
+        self.assertIn("n-k8s#1", kubernetes["contexto"])
+        self.assertNotIn("n-k8s#2", kubernetes["contexto"])
 
-    def test_nota_sem_relacao_acima_do_limiar_faz_o_executor_falhar(self):
+    def test_nota_sem_relacao_com_a_keyword_no_contexto_faz_o_executor_falhar(self):
         casos = copy.deepcopy(conjunto.carregar())
         casos[1]["documentos"].append({"id": "s-isca", "tipo": "nota", "semRelacao": True, "texto": "Comprei um livro sobre Docker de presente."})
         self.assertEqual(1, self.rodar(casos))
-        self.assertIn("sem_relacao_acima_do_limiar", [r["metrica"] for r in self.resumo()["regressoes"]])
+        self.assertIn("sem_relacao_no_contexto", [r["metrica"] for r in self.resumo()["regressoes"]])
 
-    def test_queda_de_recall_alem_do_limiar_faz_o_executor_falhar(self):
+    def test_qualquer_queda_de_recall_faz_o_executor_falhar(self):
         casos = copy.deepcopy(conjunto.carregar())
         for documento in casos[0]["documentos"]:
             if documento["id"] in ("n-docker", "n-aws", "n-git"):
@@ -55,19 +53,16 @@ class ConjuntoRagFalsoTest(unittest.TestCase):
         self.assertIn("recall_at_5", [r["metrica"] for r in self.resumo()["regressoes"]])
 
 
-class CalibracaoTest(unittest.TestCase):
-    def test_margem_negativa_quando_negativo_supera_positivo(self):
-        consultas = [{
-            "termo": "SQL",
-            "esperados": ["a"],
-            "topo": [{"id": "b", "similaridade": 0.4, "semRelacao": True}, {"id": "a", "similaridade": 0.3, "semRelacao": False}],
-            "positivos": [0.3],
-            "negativos": [0.4],
-        }]
-        calibracao = conjunto.calibracao([{"detalhes": {"limiar": 0.35, "consultas": consultas}}])
-        self.assertFalse(calibracao["separavel"])
-        self.assertEqual(-0.1, calibracao["margem"])
-        self.assertEqual({"limiar": 0.35, "recall_at_5": 0.0, "sem_relacao_acima_do_limiar": 1, "fora_do_esperado_acima": 1}, calibracao["limiarAtual"])
+class PortaoTest(unittest.TestCase):
+    def test_similaridade_so_ordena_e_o_casamento_de_termos_decide(self):
+        topo = [
+            {"id": "parecido", "texto": "Montei planilhas com tabelas dinamicas."},
+            {"id": "literal", "texto": "Usei Excel no fechamento."},
+            {"id": "sinonimo", "texto": "Operei o cluster k8s do time."},
+            {"id": "vazio", "texto": ""},
+        ]
+        self.assertEqual(["literal"], conjunto.no_contexto("Excel", topo))
+        self.assertEqual(["sinonimo"], conjunto.no_contexto("Kubernetes", topo))
 
 
 if __name__ == "__main__":

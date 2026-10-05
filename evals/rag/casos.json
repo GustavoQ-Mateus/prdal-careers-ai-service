@@ -47,7 +47,7 @@
   },
   {
     "id": "nada_passa",
-    "mede": "so notas sem relacao: nenhuma pode passar do limiar para nenhuma keyword",
+    "mede": "so notas sem relacao: nenhuma pode entrar no contexto de nenhuma keyword",
     "documentos": [
       {"id": "s-bolo", "tipo": "nota", "semRelacao": true, "texto": "Receita de bolo de cenoura com cobertura de chocolate para o domingo."},
       {"id": "s-viagem", "tipo": "nota", "semRelacao": true, "texto": "Viagem de ferias para o litoral em janeiro com a familia."},
@@ -74,6 +74,133 @@
       {"termo": "ingles", "esperados": []},
       {"termo": "contabilidade", "esperados": []},
       {"termo": "APIs REST", "esperados": []}
+    ]
+  },
+  {
+    "id": "contabilidade_e_financas",
+    "mede": "recall@5 em notas de contabilidade e financas, com sinonimos sem o termo literal e notas pessoais sobre dinheiro e banco que nao sao experiencia profissional",
+    "documentos": [
+      {"id": "f-conciliacao", "tipo": "nota", "texto": "Fiz a conciliacao bancaria diaria das contas da empresa e ajustei no ERP os lancamentos divergentes."},
+      {"id": "f-sped", "tipo": "nota", "texto": "Entreguei as obrigacoes acessorias do SPED Fiscal e da EFD Contribuicoes dentro do prazo por dois anos seguidos."},
+      {"id": "f-fechamento", "tipo": "nota", "texto": "Coordenei o fechamento contabil mensal e reduzi o prazo de dez para seis dias uteis."},
+      {"id": "f-folha", "tipo": "nota", "texto": "Calculei folha de pagamento, ferias e rescisoes para 180 funcionarios de tres unidades."},
+      {"id": "f-auditoria", "tipo": "nota", "texto": "Atendi a auditoria externa anual preparando os papeis de trabalho e as conciliacoes pedidas pelos auditores."},
+      {"id": "f-orcamento", "tipo": "nota", "texto": "Montei o orcamento anual por centro de custo e acompanhei todo mes o realizado contra o previsto."},
+      {"id": "f-impostos", "tipo": "nota", "texto": "Apurei ICMS, PIS e COFINS das filiais e revisei o enquadramento tributario de cada uma."},
+      {"id": "f-sap", "tipo": "nota", "texto": "Operei o modulo FI do SAP nas rotinas de contas a pagar e a receber."},
+      {"id": "c-controladoria", "tipo": "candidatura", "texto": "Candidatura para Analista de Controladoria: a entrevista tecnica cobrou analise de DRE e de fluxo de caixa."},
+      {"id": "s-cartao", "tipo": "nota", "semRelacao": true, "texto": "Conferir a fatura do cartao de credito pessoal e pagar ate o dia dez."},
+      {"id": "s-recibos", "tipo": "nota", "semRelacao": true, "texto": "Separar os recibos medicos da familia para a declaracao anual de renda."},
+      {"id": "s-mesada", "tipo": "nota", "semRelacao": true, "texto": "Combinar a mesada das criancas e anotar os gastos da casa num caderno."},
+      {"id": "s-agencia", "tipo": "nota", "semRelacao": true, "texto": "Passar na agencia para trocar a senha do aplicativo e pedir um cartao novo."}
+    ],
+    "consultas": [
+      {"termo": "conciliacao bancaria", "esperados": ["f-conciliacao"]},
+      {"termo": "SPED", "esperados": ["f-sped"]},
+      {"termo": "fechamento contabil", "esperados": ["f-fechamento"]},
+      {"termo": "folha de pagamento", "esperados": ["f-folha"]},
+      {"termo": "departamento pessoal", "esperados": ["f-folha"]},
+      {"termo": "auditoria", "esperados": ["f-auditoria"]},
+      {"termo": "planejamento orcamentario", "esperados": ["f-orcamento"]},
+      {"termo": "tributos", "esperados": ["f-impostos"]},
+      {"termo": "SAP", "esperados": ["f-sap"]},
+      {"termo": "contas a pagar", "esperados": ["f-sap"]},
+      {"termo": "ERP", "esperados": ["f-conciliacao"]},
+      {"termo": "DRE", "esperados": ["c-controladoria"]},
+      {"termo": "fluxo de caixa", "esperados": ["c-controladoria"]}
+    ]
+  },
+  {
+    "id": "educacao",
+    "mede": "recall@5 em notas de docencia, com siglas e sinonimos, e notas pessoais sobre escola, aulas e reunioes que nao sao experiencia profissional",
+    "documentos": [
+      {"id": "e-alfabetizacao", "tipo": "nota", "texto": "Alfabetizei turmas do primeiro ano do ensino fundamental com sequencias didaticas de leitura e escrita."},
+      {"id": "e-planos", "tipo": "nota", "texto": "Elaborei planos de aula alinhados a BNCC e avaliacoes diagnosticas a cada bimestre."},
+      {"id": "e-inclusao", "tipo": "nota", "texto": "Adaptei atividades para alunos com TEA e dislexia junto com a professora do atendimento educacional especializado."},
+      {"id": "e-remoto", "tipo": "nota", "texto": "Gravei videoaulas e organizei as turmas no Google Classroom durante o periodo de aulas remotas."},
+      {"id": "e-familias", "tipo": "nota", "texto": "Conduzi reunioes com os responsaveis para apresentar a evolucao de cada aluno no semestre."},
+      {"id": "e-matematica", "tipo": "nota", "texto": "Lecionei matematica no ensino medio, com foco em funcoes e geometria, e preparei as turmas para o ENEM."},
+      {"id": "e-formacao", "tipo": "nota", "texto": "Coordenei a formacao continuada dos professores do segmento, com encontros quinzenais de estudo.\n\nTambem acompanhei as aulas de professores iniciantes e dei devolutivas por escrito."},
+      {"id": "s-material", "tipo": "nota", "semRelacao": true, "texto": "Levar o material escolar do meu filho na segunda e assinar a agenda dele."},
+      {"id": "s-violao", "tipo": "nota", "semRelacao": true, "texto": "Aula de violao aos sabados; praticar as escalas durante a semana."},
+      {"id": "s-romance", "tipo": "nota", "semRelacao": true, "texto": "Terminar de ler o romance que ganhei de aniversario."},
+      {"id": "s-condominio", "tipo": "nota", "semRelacao": true, "texto": "Reuniao de condominio na terca para votar a pintura da fachada."}
+    ],
+    "consultas": [
+      {"termo": "alfabetizacao", "esperados": ["e-alfabetizacao"]},
+      {"termo": "BNCC", "esperados": ["e-planos"]},
+      {"termo": "plano de aula", "esperados": ["e-planos"]},
+      {"termo": "educacao inclusiva", "esperados": ["e-inclusao"]},
+      {"termo": "ensino a distancia", "esperados": ["e-remoto"]},
+      {"termo": "Google Classroom", "esperados": ["e-remoto"]},
+      {"termo": "matematica", "esperados": ["e-matematica"]},
+      {"termo": "ENEM", "esperados": ["e-matematica"]},
+      {"termo": "formacao de professores", "esperados": ["e-formacao#1"]},
+      {"termo": "mentoria", "esperados": ["e-formacao#2"]},
+      {"termo": "comunicacao com familias", "esperados": ["e-familias"]}
+    ]
+  },
+  {
+    "id": "logistica",
+    "mede": "recall@5 em notas de logistica e operacao, com siglas e sinonimos, e notas pessoais sobre mudanca, encomendas e trajetos que nao sao experiencia profissional",
+    "documentos": [
+      {"id": "l-wms", "tipo": "nota", "texto": "Implantei o WMS no centro de distribuicao e reduzi os erros de separacao de pedidos."},
+      {"id": "l-inventario", "tipo": "nota", "texto": "Organizei o inventario rotativo mensal e a acuracidade do estoque chegou a 99%."},
+      {"id": "l-rotas", "tipo": "nota", "texto": "Planejei a roteirizacao das entregas urbanas da frota propria e cortei a quilometragem rodada."},
+      {"id": "l-importacao", "tipo": "nota", "texto": "Acompanhei processos de importacao maritima, do desembaraco aduaneiro ate a entrega no armazem."},
+      {"id": "l-empilhadeira", "tipo": "nota", "texto": "Operei empilhadeira e paleteira eletrica com certificado de NR-11 em dia."},
+      {"id": "l-indicadores", "tipo": "nota", "texto": "Montei os indicadores de OTIF e lead time da operacao e apresentava a analise semanal a diretoria."},
+      {"id": "l-frete", "tipo": "nota", "texto": "Negociei com transportadoras o frete fracionado para as regioes Norte e Nordeste."},
+      {"id": "s-mudanca", "tipo": "nota", "semRelacao": true, "texto": "Encaixotar a cozinha antes da mudanca do apartamento no sabado."},
+      {"id": "s-encomenda", "tipo": "nota", "semRelacao": true, "texto": "Rastrear a encomenda da loja online que ainda nao chegou."},
+      {"id": "s-garagem", "tipo": "nota", "semRelacao": true, "texto": "Arrumar a garagem e doar as caixas que sobraram."},
+      {"id": "s-serra", "tipo": "nota", "semRelacao": true, "texto": "Ver o caminho mais curto para a viagem de carro ate a serra no feriado."}
+    ],
+    "consultas": [
+      {"termo": "WMS", "esperados": ["l-wms"]},
+      {"termo": "gestao de estoque", "esperados": ["l-inventario"]},
+      {"termo": "inventario", "esperados": ["l-inventario"]},
+      {"termo": "roteirizacao", "esperados": ["l-rotas"]},
+      {"termo": "distribuicao urbana", "esperados": ["l-rotas"]},
+      {"termo": "comercio exterior", "esperados": ["l-importacao"]},
+      {"termo": "desembaraco aduaneiro", "esperados": ["l-importacao"]},
+      {"termo": "empilhadeira", "esperados": ["l-empilhadeira"]},
+      {"termo": "NR-11", "esperados": ["l-empilhadeira"]},
+      {"termo": "OTIF", "esperados": ["l-indicadores"]},
+      {"termo": "indicadores logisticos", "esperados": ["l-indicadores"]},
+      {"termo": "transportadoras", "esperados": ["l-frete"]},
+      {"termo": "negociacao com fornecedores", "esperados": ["l-frete"]}
+    ]
+  },
+  {
+    "id": "nada_passa_perto_do_assunto",
+    "mede": "so notas pessoais com vocabulario proximo das profissoes do conjunto: nenhuma pode entrar no contexto, porque nenhuma e experiencia profissional",
+    "documentos": [
+      {"id": "s-avo", "tipo": "nota", "semRelacao": true, "texto": "Visitei minha avo internada no hospital e conversei com a equipe sobre o horario de visitas."},
+      {"id": "s-notebook", "tipo": "nota", "semRelacao": true, "texto": "Comprei um notebook novo e instalei os programas para estudar a noite."},
+      {"id": "s-porto", "tipo": "nota", "semRelacao": true, "texto": "Assisti a um documentario sobre portos e navios cargueiros."},
+      {"id": "s-boleto", "tipo": "nota", "semRelacao": true, "texto": "Pagar o boleto do condominio e a conta de luz ate sexta."},
+      {"id": "s-licao", "tipo": "nota", "semRelacao": true, "texto": "Ajudei meu sobrinho com a licao de casa no fim de semana."},
+      {"id": "s-feira", "tipo": "nota", "semRelacao": true, "texto": "Pechinchei o preco das frutas na feira de sabado."},
+      {"id": "s-celular", "tipo": "nota", "semRelacao": true, "texto": "Meu celular travou de novo; levar na assistencia tecnica."},
+      {"id": "s-farmacia", "tipo": "nota", "semRelacao": true, "texto": "Comprar remedio para pressao na farmacia e marcar retorno no posto."}
+    ],
+    "consultas": [
+      {"termo": "UTI", "esperados": []},
+      {"termo": "enfermagem", "esperados": []},
+      {"termo": "suporte tecnico", "esperados": []},
+      {"termo": "Python", "esperados": []},
+      {"termo": "AWS", "esperados": []},
+      {"termo": "contabilidade", "esperados": []},
+      {"termo": "contas a pagar", "esperados": []},
+      {"termo": "orcamento", "esperados": []},
+      {"termo": "logistica", "esperados": []},
+      {"termo": "comercio exterior", "esperados": []},
+      {"termo": "pedagogia", "esperados": []},
+      {"termo": "matematica", "esperados": []},
+      {"termo": "vendas", "esperados": []},
+      {"termo": "negociacao", "esperados": []},
+      {"termo": "atendimento ao cliente", "esperados": []}
     ]
   }
 ]
