@@ -67,7 +67,7 @@
   },
   "agente": {
     "metricas": {
-      "tool_correta": {
+      "efeito_correto": {
         "direcao": "maior",
         "valor": 1.0,
         "limiar": 0.17
