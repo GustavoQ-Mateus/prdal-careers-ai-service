@@ -59,7 +59,7 @@
       "juiz_relacao_falhas": {
         "direcao": "menor",
         "valor": null,
-        "limiar": 0
+        "limiar": 1
       }
     }
   },

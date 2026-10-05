@@ -1,12 +1,15 @@
+import os
 import re
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 from app.carregador_prompts import obter as obter_prompt
 from app.casamento import termo_presente
 from app.fontes import fontes_da_geracao
-from app.generate import TETO_REQUISICOES, DiagnosticoGeracao, generate_cv_pipeline
+from app import juiz_relacao
+from app.generate import MOTIVO_RELACAO, TETO_REQUISICOES, DiagnosticoGeracao, generate_cv_pipeline
 from app.orcamento import BULLETS_TOTAL, COMPETENCIAS_MAX_CATEGORIAS, COMPETENCIAS_MAX_TERMOS, RESUMO_MAX_FRASES, bullets_maximos
 from app.renderizador import experiencias_por_recencia
 from app.schemas import EstruturaCurriculo, GenerateCvRequest
@@ -116,7 +119,7 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
     uso_geracao = Uso()
     uso_juiz = Uso()
     contexto = cliente_falso(_roteiros()[caso["id"]]) if falso else nullcontext()
-    with contexto:
+    with contexto, mock.patch.dict(os.environ, {juiz_relacao.VARIAVEL: "1"}):
         diagnostico = DiagnosticoGeracao()
         with medir(uso_geracao):
             resposta = generate_cv_pipeline(req, diagnostico)
@@ -139,6 +142,11 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
         }
         for indice, sonda in enumerate(caso.get("sondasJuiz", []))
     ]
+    reprovadas = {
+        (r.chave, r.texto)
+        for r in [*diagnostico.rejeitadas, *diagnostico.descartadas]
+        if r.motivo.startswith(MOTIVO_RELACAO)
+    }
     uso = Uso()
     uso.somar(uso_geracao)
     uso.somar(uso_juiz)
@@ -146,6 +154,7 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
         "frases_rejeitadas": len(diagnostico.rejeitadas),
         "frases_reparadas": diagnostico.reparadas,
         "frases_descartadas": len(diagnostico.descartadas),
+        "reprovadas_juiz_producao": len(reprovadas),
         "metrica_sem_fonte": len(sem_fonte),
         "termos_proibidos_presentes": len(proibidos),
         "cobertura_keywords": round(len(resposta.analise_final.keywords_encontradas) / len(keywords), 4) if keywords else None,
@@ -164,6 +173,7 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
         "detalhes": {
             "usoGeracao": uso_geracao.como_dict(),
             "usoJuiz": uso_juiz.como_dict(),
+            "juizDeProducao": diagnostico.juiz,
             "score": {"inicial": resposta.analise_inicial.score, "final": resposta.analise_final.score},
             "keywordsEncontradas": resposta.analise_final.keywords_encontradas,
             "rejeitadas": [{"chave": r.chave, "texto": r.texto, "motivo": r.motivo} for r in diagnostico.rejeitadas],
@@ -209,6 +219,7 @@ def resumir(resultados: list[dict[str, Any]]) -> dict[str, Any]:
         "frases_rejeitadas": soma("frases_rejeitadas"),
         "frases_reparadas": soma("frases_reparadas"),
         "frases_descartadas": soma("frases_descartadas"),
+        "reprovadas_juiz_producao": soma("reprovadas_juiz_producao"),
         "juiz_requisito": media([1.0 if n["respondeRequisito"] else 0.0 for n in notas]),
         "juiz_relacao": media([1.0 if n["relacaoSustentada"] else 0.0 for n in notas]),
         "juiz_relacao_falhas": sum(1 for n in notas if not n["relacaoSustentada"]),
@@ -226,7 +237,8 @@ def extras(resultados: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     return {
         "tetoDeRequisicoesPorGeracao": TETO_REQUISICOES,
-        "juizEmProducao": False,
+        "juizEmProducao": juiz_relacao.versao(),
+        "juizDeProducaoPorCaso": {r["id"]: r["detalhes"]["juizDeProducao"] for r in resultados if not r.get("erro")},
         "promptDaReescrita": obter_prompt("reescrita").rotulo,
         "frasesComRelacaoNaoSustentada": sem_relacao,
     }

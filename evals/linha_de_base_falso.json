@@ -28,12 +28,12 @@
       },
       "requisicoes_media": {
         "direcao": "menor",
-        "valor": 1.1429,
+        "valor": 2.2857,
         "limiar": 0.5
       },
       "requisicoes_max": {
         "direcao": "menor",
-        "valor": 2,
+        "valor": 4,
         "absoluto": 6
       },
       "frases_descartadas": {
@@ -59,7 +59,7 @@
       "juiz_relacao_falhas": {
         "direcao": "menor",
         "valor": 1,
-        "limiar": 0
+        "limiar": 1
       }
     },
     "gravadaEm": "2026-10-04",

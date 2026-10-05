@@ -32,6 +32,9 @@ class ConjuntoGeracaoFalsoTest(unittest.TestCase):
         self.assertEqual(1.0, metricas["juiz_sondas"])
         self.assertEqual(1, metricas["juiz_relacao_falhas"])
         self.assertEqual("reescrita.v3", resumo["promptDaReescrita"])
+        self.assertEqual("juiz_relacao.v1", resumo["juizEmProducao"])
+        self.assertEqual({"ligado"}, set(resumo["juizDeProducaoPorCaso"].values()))
+        self.assertEqual(0, metricas["reprovadas_juiz_producao"])
         [falha] = resumo["frasesComRelacaoNaoSustentada"]
         self.assertEqual("migracao_postgres_causalidade", falha["caso"])
         self.assertIn("reduzindo", falha["texto"])
@@ -42,13 +45,13 @@ class ConjuntoGeracaoFalsoTest(unittest.TestCase):
         self.assertEqual(1, len(causal))
         self.assertFalse(causal[0]["relacaoSustentada"])
         self.assertEqual(0, caso["metricas"]["metrica_sem_fonte"])
-        self.assertEqual(2, caso["uso"]["requisicoes"])
-        self.assertEqual(1, caso["detalhes"]["usoGeracao"]["requisicoes"])
+        self.assertEqual(3, caso["uso"]["requisicoes"])
+        self.assertEqual(2, caso["detalhes"]["usoGeracao"]["requisicoes"])
 
         reparado = json.loads((self.saida / "backend_java_termo_ausente.json").read_text(encoding="utf-8"))
         self.assertIn("Kubernetes", reparado["detalhes"]["rejeitadas"][0]["motivo"])
         self.assertNotIn("Kubernetes", reparado["detalhes"]["markdown"])
-        self.assertEqual(2, reparado["metricas"]["requisicoes"])
+        self.assertEqual(4, reparado["metricas"]["requisicoes"])
 
     def test_juiz_que_erra_a_sonda_de_causalidade_faz_o_executor_falhar(self):
         roteiros = copy.deepcopy(conjunto._roteiros())

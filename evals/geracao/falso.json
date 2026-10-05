@@ -97,6 +97,47 @@
     },
     {
       "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.rota.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.rota.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.rota.4",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.erp.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.erp.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
+      }
+    },
+    {
+      "json": {
         "titulo": {
           "texto": "",
           "fontes": []
@@ -118,6 +159,17 @@
         "entrada": 700,
         "saida": 120,
         "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "bullet.rota.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
       }
     },
     {
@@ -281,6 +333,52 @@
         "entrada": 300,
         "saida": 900,
         "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.loja.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.loja.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.loja.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.loja.4",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.agencia.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.agencia.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
       }
     },
     {
@@ -466,6 +564,47 @@
         "notas": [
           {
             "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.hospital.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.hospital.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.hospital.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.upa.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.upa.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
             "respondeRequisito": true,
             "requisitoCitado": "Enfermeiro de UTI Adulto",
             "relacaoSustentada": true,
@@ -599,6 +738,37 @@
         "notas": [
           {
             "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.fintech.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.fintech.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.fintech.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
             "respondeRequisito": true,
             "requisitoCitado": "Desenvolvedor Node.js",
             "relacaoSustentada": true,
@@ -711,6 +881,37 @@
         "entrada": 300,
         "saida": 900,
         "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.cooperativa.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.cooperativa.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.cooperativa.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
       }
     },
     {
@@ -847,6 +1048,47 @@
         "entrada": 300,
         "saida": 900,
         "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.saas.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.saas.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.saas.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.distribuidora.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.distribuidora.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
       }
     },
     {
@@ -997,6 +1239,47 @@
         "entrada": 300,
         "saida": 900,
         "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.varejo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.varejo.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.varejo.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.banco.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.banco.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
       }
     },
     {

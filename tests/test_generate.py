@@ -7,8 +7,11 @@ import anthropic
 import httpx2
 
 from app import degradacao as deg
+from app import juiz_relacao
+from app.carregador_prompts import obter
 from app.generate import (
     TETO_REQUISICOES,
+    DiagnosticoGeracao,
     analisar_ats,
     curriculo_do_perfil,
     generate_cv_pipeline,
@@ -437,6 +440,108 @@ class RenderizadorDoPerfilTest(unittest.TestCase):
     def test_contato_do_perfil_entra_por_codigo(self):
         perfil = PerfilMestre.model_validate({"nome": "Sem Contato"})
         self.assertEqual("", linha_contato(perfil))
+
+
+def _notas(*reprovadas, aceitas=("titulo", "resumo.1", "bullet.rota.1", "bullet.erp.1")):
+    return {
+        "notas": [
+            {"chave": c, "relacaoSustentada": c not in reprovadas, "justificativa": "finalidade nao escrita na fonte" if c in reprovadas else "sustentada"}
+            for c in aceitas
+        ]
+    }
+
+
+def _system(requisicao) -> str:
+    return requisicao["system"][0]["text"]
+
+
+@patch.dict(os.environ, {"AI_JUIZ_RELACAO": "1"})
+class JuizDeRelacaoTest(unittest.TestCase):
+    def test_sem_a_variavel_o_juiz_fica_ligado(self):
+        with patch.dict(os.environ):
+            os.environ.pop("AI_JUIZ_RELACAO", None)
+            self.assertTrue(juiz_relacao.ligado())
+        for valor in ("0", "false", "off"):
+            with patch.dict(os.environ, {"AI_JUIZ_RELACAO": valor}):
+                self.assertFalse(juiz_relacao.ligado())
+
+    def test_frase_reprovada_pelo_juiz_entra_no_reparo_com_as_do_termo(self):
+        consertado = reparo(
+            ("bullet.rota.1", "Atuei no back-end de plataforma web com Python (FastAPI) e PostgreSQL.", ["rota"]),
+            ("bullet.rota.2", "Implementei autenticacao JWT multi-tenant e filas assincronas.", ["rota"]),
+        )
+        segunda = _notas(aceitas=("bullet.rota.1", "bullet.rota.2"))
+        with ComClienteFalso(resposta(BOA), resposta(_notas("bullet.rota.1")), resposta(consertado), resposta(segunda)) as cliente:
+            resultado = generate_cv_pipeline(req_dev())
+
+        self.assertEqual(4, len(cliente.requisicoes))
+        juiz = cliente.requisicoes[1]
+        self.assertEqual(obter("juiz_relacao").texto, _system(juiz))
+        self.assertEqual("low", juiz["output_config"]["effort"])
+        self.assertIn("chave: bullet.rota.1", _texto_usuario(juiz))
+        self.assertNotIn("chave: bullet.rota.2", _texto_usuario(juiz))
+        self.assertIn("[rota]", _texto_usuario(juiz))
+        pedido_reparo = _texto_usuario(cliente.requisicoes[2])
+        self.assertIn("chave: bullet.rota.1", pedido_reparo)
+        self.assertIn("motivo: relacao nao sustentada pela fonte citada: finalidade nao escrita na fonte", pedido_reparo)
+        self.assertIn("chave: bullet.rota.2", pedido_reparo)
+        self.assertIn("chave: resumo.2", pedido_reparo)
+        segundo_juiz = _texto_usuario(cliente.requisicoes[3])
+        self.assertIn("chave: bullet.rota.1", segundo_juiz)
+        self.assertIn("chave: bullet.rota.2", segundo_juiz)
+        self.assertNotIn("chave: bullet.erp.1", segundo_juiz)
+        self.assertIsNone(resultado.degradacao)
+        rota = next(e for e in resultado.estrutura.experiencias if e.experiencia_id == "rota")
+        self.assertEqual(
+            ["Atuei no back-end de plataforma web com Python (FastAPI) e PostgreSQL.",
+             "Implementei autenticacao JWT multi-tenant e filas assincronas."],
+            [b.texto for b in rota.bullets],
+        )
+
+    def test_reparo_reprovado_de_novo_pelo_juiz_e_descartado(self):
+        consertado = reparo(("bullet.rota.1", "Liderei sozinha o back-end com Python (FastAPI) e PostgreSQL.", ["rota"]))
+        diagnostico = DiagnosticoGeracao()
+        respostas = [resposta(BOA), resposta(_notas("bullet.rota.1")), resposta(consertado), resposta(_notas("bullet.rota.1", aceitas=("bullet.rota.1",)))]
+        with ComClienteFalso(*respostas):
+            resultado = generate_cv_pipeline(req_dev(), diagnostico)
+        self.assertNotIn("Liderei sozinha", resultado.markdown)
+        self.assertIn("bullet.rota.1", [r.chave for r in diagnostico.descartadas])
+        self.assertEqual(0, diagnostico.reparadas)
+        self.assertEqual("ligado", diagnostico.juiz)
+        self.assertIsNone(resultado.degradacao)
+
+    def test_pior_caso_respeita_o_teto_de_seis_e_segue_sem_o_segundo_juiz(self):
+        consertado = reparo(("bullet.rota.1", "Atuei no back-end com Python (FastAPI) e PostgreSQL.", ["rota"]))
+        respostas = [
+            resposta("nao e json"), resposta(BOA),
+            resposta("nao e json"), resposta(_notas("bullet.rota.1")),
+            resposta("nao e json"), resposta(consertado),
+            resposta(_notas(aceitas=("bullet.rota.1",))),
+        ]
+        with ComClienteFalso(*respostas) as cliente:
+            with operacao() as op:
+                resultado = generate_cv_pipeline(req_dev())
+        self.assertEqual(TETO_REQUISICOES, len(cliente.requisicoes))
+        self.assertEqual(TETO_REQUISICOES, op.requisicoes)
+        self.assertIsNone(resultado.degradacao)
+        self.assertIn("Atuei no back-end com Python (FastAPI) e PostgreSQL.", resultado.markdown)
+
+    def test_juiz_indisponivel_segue_sem_ele_e_sem_degradar(self):
+        diagnostico = DiagnosticoGeracao()
+        with ComClienteFalso(resposta(BOA), _limite(), resposta(reparo())) as cliente, self.assertLogs("app.generate", "WARNING") as logs:
+            resultado = generate_cv_pipeline(req_dev(), diagnostico)
+        self.assertEqual(3, len(cliente.requisicoes))
+        self.assertIsNone(resultado.degradacao)
+        self.assertEqual("indisponivel", diagnostico.juiz)
+        self.assertIn("Atuei no back-end de plataforma web em producao com Python (FastAPI) e PostgreSQL.", resultado.markdown)
+        self.assertTrue(any("juiz de relacao indisponivel" in linha for linha in logs.output))
+
+    def test_com_a_flag_desligada_o_fluxo_e_o_de_hoje(self):
+        with patch.dict(os.environ, {"AI_JUIZ_RELACAO": "0"}):
+            with ComClienteFalso(resposta(BOA), resposta(reparo())) as cliente:
+                generate_cv_pipeline(req_dev())
+        self.assertEqual(2, len(cliente.requisicoes))
+        self.assertTrue(all(_system(r) != obter("juiz_relacao").texto for r in cliente.requisicoes))
 
 
 if __name__ == "__main__":

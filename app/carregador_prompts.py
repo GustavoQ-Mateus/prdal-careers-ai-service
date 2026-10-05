@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DIRETORIO_PROMPTS = Path(__file__).resolve().parent / "prompts"
-PROMPTS_OBRIGATORIOS = ("reescrita",)
+PROMPTS_OBRIGATORIOS = ("reescrita", "juiz_relacao")
 
 _ARQUIVO_RE = re.compile(r"^(?P<id>[a-z0-9_-]+)\.v(?P<versao>\d+)\.md$")
 _CABECALHO_RE = re.compile(r"\A---\n(?P<campos>.*?)\n---\n(?P<texto>.*)\Z", re.DOTALL)

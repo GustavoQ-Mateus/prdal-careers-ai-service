@@ -60,6 +60,7 @@ class CarregadorPromptsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as pasta:
             _escrever(Path(pasta), "reescrita.v1.md", "---\nid: reescrita\nversao: 1\n---\nprimeira\n")
             _escrever(Path(pasta), "reescrita.v2.md", "---\nid: reescrita\nversao: 2\n---\nsegunda\n")
+            _escrever(Path(pasta), "juiz_relacao.v1.md", "---\nid: juiz_relacao\nversao: 1\n---\njuiz\n")
             carregar_prompts(Path(pasta))
             self.assertEqual(obter("reescrita").texto, "segunda")
 

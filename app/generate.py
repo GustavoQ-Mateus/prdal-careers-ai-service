@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass, field
 
 from . import degradacao as deg
+from . import juiz_relacao
 from .carregador_prompts import obter as obter_prompt
 from .casamento import compactar, termo_presente
 from .estrutura import (
@@ -53,6 +54,7 @@ DELIMITADOR_VAGA = "vaga_nao_confiavel"
 NOME_IDIOMA = {"pt": "portugues do Brasil", "en": "ingles", "es": "espanhol"}
 COBERTURA_ALTA = 70
 COBERTURA_MEDIA = 50
+MOTIVO_RELACAO = "relacao nao sustentada pela fonte citada"
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +152,7 @@ class DiagnosticoGeracao:
     rejeitadas: list[Rejeicao] = field(default_factory=list)
     reparadas: int = 0
     descartadas: list[Rejeicao] = field(default_factory=list)
+    juiz: str = "desligado"
 
 
 @dataclass
@@ -185,6 +188,47 @@ def _posicionar(rascunho: _Rascunho, local: _Local, frase: FraseFonte | None) ->
         rascunho.resumo[local.indice] = frase
     else:
         rascunho.bullets[local.experiencia_id][local.indice] = frase
+
+
+def _frase_em(rascunho: _Rascunho, local: _Local) -> FraseFonte | None:
+    if local.tipo == "titulo":
+        return rascunho.titulo
+    if local.tipo == "resumo":
+        return rascunho.resumo[local.indice]
+    return rascunho.bullets[local.experiencia_id][local.indice]
+
+
+def _julgar_relacao(rascunho: _Rascunho, ctx: _Contexto, chaves: list[str]) -> list[Rejeicao] | None:
+    frases = {
+        chave: frase
+        for chave in chaves
+        if (frase := _frase_em(rascunho, rascunho.locais[chave])) is not None
+    }
+    if not frases:
+        return []
+    pedido = [
+        juiz_relacao.FraseParaJulgar(
+            chave,
+            frase.texto,
+            tuple((fonte_id, ctx.fontes[fonte_id].texto) for fonte_id in frase.fontes if fonte_id in ctx.fontes),
+        )
+        for chave, frase in frases.items()
+    ]
+    try:
+        notas = juiz_relacao.julgar(pedido)
+    except LLMUnavailable as exc:
+        logger.warning("juiz de relacao indisponivel; seguindo sem ele: %s", exc)
+        return None
+    rejeitadas = []
+    for chave, frase in frases.items():
+        nota = notas.get(chave)
+        if nota is None or nota.relacao_sustentada:
+            continue
+        _posicionar(rascunho, rascunho.locais[chave], None)
+        motivo = f"{MOTIVO_RELACAO}: {nota.justificativa.strip()}"
+        rejeitadas.append(Rejeicao(chave, frase.texto, tuple(frase.fontes), motivo))
+        logger.info("frase rejeitada pelo juiz chave=%s justificativa=%s", chave, nota.justificativa)
+    return rejeitadas
 
 
 def _registrar(rascunho: _Rascunho, ctx: _Contexto, chave: str, frase: FraseFonte, local: _Local) -> None:
@@ -270,7 +314,7 @@ def _user_reparo(rascunho: _Rascunho, ctx: _Contexto) -> str:
     )
 
 
-def _reparar(rascunho: _Rascunho, ctx: _Contexto) -> int:
+def _reparar(rascunho: _Rascunho, ctx: _Contexto, juiz: bool) -> int:
     pendentes = {r.chave: r for r in rascunho.rejeitadas}
     resposta = complete_model(
         _system_prompt(),
@@ -281,7 +325,7 @@ def _reparar(rascunho: _Rascunho, ctx: _Contexto) -> int:
         prompt_version=_prompt_version(),
     )
     respondidas: set[str] = set()
-    aceitas = 0
+    aceitas: list[str] = []
     for item in resposta.reparos:
         chave = item.chave.strip()
         if chave not in pendentes or chave in respondidas:
@@ -291,17 +335,21 @@ def _reparar(rascunho: _Rascunho, ctx: _Contexto) -> int:
         aceita, rejeicao = _checar(ctx, chave, FraseFonte(texto=item.texto, fontes=item.fontes), local)
         _posicionar(rascunho, local, aceita)
         if aceita:
-            aceitas += 1
+            aceitas.append(chave)
         else:
             rascunho.descartadas.append(rejeicao or Rejeicao(chave, "", (), "descartada no reparo"))
     rascunho.descartadas.extend(r for chave, r in pendentes.items() if chave not in respondidas)
+    if juiz and aceitas:
+        reprovadas = _julgar_relacao(rascunho, ctx, aceitas) or []
+        rascunho.descartadas.extend(reprovadas)
+        aceitas = [chave for chave in aceitas if chave not in {r.chave for r in reprovadas}]
     for rejeicao in rascunho.descartadas:
         logger.info("frase descartada chave=%s motivo=%s", rejeicao.chave, rejeicao.motivo)
     logger.info(
         "reparo localizado rejeitadas=%s reparadas=%s descartadas=%s",
-        len(pendentes), aceitas, len(rascunho.descartadas),
+        len(pendentes), len(aceitas), len(rascunho.descartadas),
     )
-    return aceitas
+    return len(aceitas)
 
 
 def _montar(rascunho: _Rascunho, ctx: _Contexto) -> tuple[EstruturaCurriculo, bool]:
@@ -405,12 +453,18 @@ def _reescrever(
     except LLMUnavailable as exc:
         return None, deg.registrar(deg.REESCRITA_INDISPONIVEL, exc)
     rascunho = _verificar(resposta, ctx)
+    juiz = juiz_relacao.ligado()
+    if juiz:
+        reprovadas = _julgar_relacao(rascunho, ctx, list(rascunho.locais))
+        juiz = reprovadas is not None
+        diagnostico.juiz = "ligado" if juiz else "indisponivel"
+        rascunho.rejeitadas.extend(reprovadas or [])
     diagnostico.rejeitadas = list(rascunho.rejeitadas)
     for rejeicao in rascunho.rejeitadas:
         logger.info("frase rejeitada chave=%s motivo=%s", rejeicao.chave, rejeicao.motivo)
     if rascunho.rejeitadas:
         try:
-            diagnostico.reparadas = _reparar(rascunho, ctx)
+            diagnostico.reparadas = _reparar(rascunho, ctx, juiz)
         except LLMUnavailable as exc:
             rascunho.descartadas.extend(rascunho.rejeitadas)
             logger.warning("reparo indisponivel; seguindo com as frases aceitas: %s", exc)
