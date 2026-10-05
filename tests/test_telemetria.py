@@ -164,7 +164,7 @@ class UsoDevolvidoTest(unittest.TestCase):
         with ComClienteFalso(*[resposta(estrutura) for _ in range(4)]):
             corpo = TestClient(app).post("/generate-cv-pipeline", json=corpo_req).json()
         self.assertEqual("claude-teste", corpo["modelo"])
-        self.assertEqual("reescrita.v3", corpo["promptVersion"])
+        self.assertEqual("reescrita.v4", corpo["promptVersion"])
         self.assertEqual("Experiencia com Python.", corpo["estrutura"]["resumo"][0]["texto"])
         self.assertGreaterEqual(corpo["uso"]["chamadas"], 1)
 

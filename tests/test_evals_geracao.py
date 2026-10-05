@@ -23,7 +23,8 @@ class ConjuntoGeracaoFalsoTest(unittest.TestCase):
         self.assertEqual(0, self.rodar())
         resumo = json.loads((self.saida / "resumo.json").read_text(encoding="utf-8"))
         metricas = resumo["metricas"]
-        self.assertEqual(7, resumo["casos"])
+        self.assertEqual(8, resumo["casos"])
+        self.assertEqual(0, metricas["termos_sustentados_ausentes"])
         self.assertEqual(0, metricas["metrica_sem_fonte"])
         self.assertEqual(0, metricas["termos_proibidos_presentes"])
         self.assertEqual(0, metricas["violacoes_formato"])
@@ -31,7 +32,7 @@ class ConjuntoGeracaoFalsoTest(unittest.TestCase):
         self.assertEqual(1, metricas["frases_reparadas"])
         self.assertEqual(1.0, metricas["juiz_sondas"])
         self.assertEqual(1, metricas["juiz_relacao_falhas"])
-        self.assertEqual("reescrita.v3", resumo["promptDaReescrita"])
+        self.assertEqual("reescrita.v4", resumo["promptDaReescrita"])
         self.assertEqual("juiz_relacao.v1", resumo["juizEmProducao"])
         self.assertEqual({"ligado"}, set(resumo["juizDeProducaoPorCaso"].values()))
         self.assertEqual(0, metricas["reprovadas_juiz_producao"])
@@ -47,6 +48,12 @@ class ConjuntoGeracaoFalsoTest(unittest.TestCase):
         self.assertEqual(0, caso["metricas"]["metrica_sem_fonte"])
         self.assertEqual(3, caso["uso"]["requisicoes"])
         self.assertEqual(2, caso["detalhes"]["usoGeracao"]["requisicoes"])
+
+        sustentado = json.loads((self.saida / "keyword_sustentada_por_termo_especifico.json").read_text(encoding="utf-8"))
+        self.assertEqual([], sustentado["detalhes"]["rejeitadas"])
+        self.assertEqual({"inicial": 68, "final": 89}, sustentado["detalhes"]["score"])
+        self.assertIn("metodologias ageis (Scrum/Kanban)", sustentado["detalhes"]["markdown"])
+        self.assertNotIn("CloudFormation", sustentado["detalhes"]["markdown"])
 
         reparado = json.loads((self.saida / "backend_java_termo_ausente.json").read_text(encoding="utf-8"))
         self.assertIn("Kubernetes", reparado["detalhes"]["rejeitadas"][0]["motivo"])

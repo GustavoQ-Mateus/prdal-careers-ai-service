@@ -1341,5 +1341,200 @@
         "saida": 400
       }
     }
+  ],
+  "keyword_sustentada_por_termo_especifico": [
+    {
+      "json": {
+        "titulo": {
+          "texto": "Desenvolvedora Full Stack",
+          "fontes": [
+            "loja"
+          ]
+        },
+        "resumo": [
+          {
+            "texto": "Desenvolvedora full stack com Python e TypeScript.",
+            "fontes": [
+              "resumo"
+            ]
+          }
+        ],
+        "experiencias": [
+          {
+            "experienciaId": "loja",
+            "bullets": [
+              {
+                "texto": "Desenvolvi servicos em Python na AWS para o catalogo da loja.",
+                "fontes": [
+                  "loja"
+                ]
+              },
+              {
+                "texto": "Escrevi testes automatizados (pytest, Vitest, Playwright) cobrindo fluxos criticos do checkout.",
+                "fontes": [
+                  "loja"
+                ]
+              },
+              {
+                "texto": "Participei das cerimonias de metodologias ageis (Scrum/Kanban) do time de produto.",
+                "fontes": [
+                  "loja"
+                ]
+              }
+            ]
+          },
+          {
+            "experienciaId": "agencia",
+            "bullets": [
+              {
+                "texto": "Mantive paginas em TypeScript para campanhas de clientes.",
+                "fontes": [
+                  "agencia"
+                ]
+              },
+              {
+                "texto": "Corrigi falhas de layout reportadas pelo atendimento.",
+                "fontes": [
+                  "agencia"
+                ]
+              }
+            ]
+          }
+        ],
+        "competencias": [
+          {
+            "categoria": "Principais",
+            "termos": [
+              {
+                "termo": "Python",
+                "fonte": "skills"
+              },
+              {
+                "termo": "TypeScript",
+                "fonte": "skills"
+              },
+              {
+                "termo": "AWS",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Arquitetura de microsserviços",
+                "fonte": "skills"
+              },
+              {
+                "termo": "Testes automatizados",
+                "fonte": "skills"
+              }
+            ]
+          }
+        ],
+        "reparos": []
+      },
+      "uso": {
+        "entrada": 300,
+        "saida": 900,
+        "cache_lida": 4200
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "resumo.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.loja.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.loja.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.loja.3",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.agencia.1",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          },
+          {
+            "chave": "bullet.agencia.2",
+            "relacaoSustentada": true,
+            "justificativa": "sustentada"
+          }
+        ]
+      }
+    },
+    {
+      "json": {
+        "notas": [
+          {
+            "chave": "titulo",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Full Stack Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "resumo.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Full Stack Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.loja.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Full Stack Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.loja.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Full Stack Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.loja.3",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Full Stack Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.agencia.1",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Full Stack Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          },
+          {
+            "chave": "bullet.agencia.2",
+            "respondeRequisito": true,
+            "requisitoCitado": "Desenvolvedora Full Stack Pleno",
+            "relacaoSustentada": true,
+            "justificativa": "fato copiado da fonte"
+          }
+        ]
+      },
+      "uso": {
+        "entrada": 1500,
+        "saida": 400
+      }
+    }
   ]
 }

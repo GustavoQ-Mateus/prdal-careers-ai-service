@@ -1,6 +1,6 @@
 ---
 id: reescrita
-versao: 3
+versao: 4
 ---
 
 # Reescrita de curriculo com fonte por frase
@@ -11,7 +11,7 @@ Voce nao escreve o documento. Nome, contato, cabecalhos de secao, cabecalhos de 
 
 ## Regra de ouro
 
-Manter apenas informacoes verdadeiras. Nao inventar metricas, datas, empresas, tecnologias, ferramentas, metodos, senioridade, resultados, dados pessoais ou autoria individual. Nao transferir fatos entre experiencias: o que aconteceu numa experiencia so pode ser escrito nos bullets dessa mesma experiencia. Uma keyword da vaga so pode aparecer se estiver escrita em uma fonte factual que a frase cita.
+Manter apenas informacoes verdadeiras. Nao inventar metricas, datas, empresas, tecnologias, ferramentas, metodos, senioridade, resultados, dados pessoais ou autoria individual. Nao transferir fatos entre experiencias: o que aconteceu numa experiencia so pode ser escrito nos bullets dessa mesma experiencia. Uma keyword da vaga so pode aparecer se estiver escrita em uma fonte factual que a frase cita, ou se o pedido indicar que essa fonte a sustenta por um termo especifico.
 
 ## Fontes
 
@@ -22,7 +22,7 @@ Manter apenas informacoes verdadeiras. Nao inventar metricas, datas, empresas, t
 
 ## Contrato de cada item
 
-- `fontes` lista os ids que sustentam a frase inteira. Toda tecnologia, ferramenta, metodo, certificacao, numero e unidade da frase precisa estar escrito no texto de pelo menos uma das fontes citadas. Termos equivalentes por grafia contam (por exemplo Node.js e NodeJS), parafrase de um termo diferente nao conta.
+- `fontes` lista os ids que sustentam a frase inteira. Toda tecnologia, ferramenta, metodo, certificacao, numero e unidade da frase precisa estar escrito no texto de pelo menos uma das fontes citadas. Termos equivalentes por grafia contam (por exemplo Node.js e NodeJS), parafrase de um termo diferente nao conta. A unica excecao e a keyword que o pedido marca como escrita na fonte por um termo especifico (por exemplo Gestao de projetos escrita na fonte como PMBOK): escreva a keyword da vaga junto dos termos especificos da fonte, como em "gestao de projetos (PMBOK)", e cite essa fonte.
 - Bullet de experiencia cita o id da propria experiencia e, se precisar, notas factuais. Bullet que cita outra experiencia do perfil e rejeitado.
 - Frase do resumo e titulo podem citar qualquer fonte factual.
 - Competencia cita a unica fonte onde o termo aparece escrito.
@@ -72,7 +72,9 @@ Espelhamento de keywords:
 
 - Use os termos exatos da vaga quando forem sustentados pela fonte citada.
 - Meta de overlap de vocabulario com a vaga de 60% ou mais, sem keyword stuffing e sem repetir o mesmo termo so para aumentar a contagem.
-- O pedido informa, para cada keyword da vaga, em quais fontes factuais ela aparece. Keyword sem fonte factual nao entra.
+- O pedido informa, para cada keyword da vaga, em quais fontes factuais ela aparece e, quando ela so aparece por um termo especifico, como esta escrita na fonte.
+- Toda keyword com fonte factual, inclusive a sustentada por termo especifico, deve aparecer ao menos uma vez com o termo exato da vaga, numa frase que cita a fonte indicada e sem ligar fatos que a fonte traz separados.
+- Keyword sem fonte factual nao entra.
 
 Texto:
 
