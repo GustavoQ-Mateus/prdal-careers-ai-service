@@ -17,7 +17,7 @@ from app.generate import (
     generate_cv_pipeline,
     reduzir_curriculo,
 )
-from app.llm import operacao
+from app.llm import PrazoEsgotado, operacao
 from app.orcamento import BULLETS_RECENTES
 from app.renderizador import linha_contato, texto_perfil
 from app.schemas import FonteContexto, GenerateCvRequest, PerfilMestre, ReduzirCvRequest
@@ -542,6 +542,47 @@ class JuizDeRelacaoTest(unittest.TestCase):
                 generate_cv_pipeline(req_dev())
         self.assertEqual(2, len(cliente.requisicoes))
         self.assertTrue(all(_system(r) != obter("juiz_relacao").texto for r in cliente.requisicoes))
+
+
+def _prazo_acaba_na_chamada(numero):
+    chamadas = {"n": 0}
+
+    def timeout(_op):
+        chamadas["n"] += 1
+        if chamadas["n"] >= numero:
+            raise PrazoEsgotado("prazo da operacao esgotado antes da chamada ao modelo")
+        return 30.0
+
+    return patch("app.llm.timeout_da_chamada", side_effect=timeout)
+
+
+class PrazoNoJuizENoReparoTest(unittest.TestCase):
+    @patch.dict(os.environ, {"AI_JUIZ_RELACAO": "1"})
+    def test_prazo_esgotado_no_juiz_segue_com_as_frases_aceitas(self):
+        diagnostico = DiagnosticoGeracao()
+        with ComClienteFalso(resposta(BOA), resposta(reparo())) as cliente, _prazo_acaba_na_chamada(2), self.assertLogs("app.generate", "WARNING") as logs:
+            resultado = generate_cv_pipeline(req_dev(), diagnostico)
+        self.assertEqual(1, len(cliente.requisicoes))
+        self.assertEqual("indisponivel", diagnostico.juiz)
+        self.assertIsNone(resultado.degradacao)
+        self.assertIn("Atuei no back-end de plataforma web em producao com Python (FastAPI) e PostgreSQL.", resultado.markdown)
+        self.assertTrue(any("juiz de relacao indisponivel" in linha for linha in logs.output))
+
+    def test_prazo_esgotado_no_reparo_segue_com_as_frases_aceitas(self):
+        diagnostico = DiagnosticoGeracao()
+        with ComClienteFalso(resposta(BOA), resposta(reparo())) as cliente, _prazo_acaba_na_chamada(2), self.assertLogs("app.generate", "WARNING") as logs:
+            resultado = generate_cv_pipeline(req_dev(), diagnostico)
+        self.assertEqual(1, len(cliente.requisicoes))
+        self.assertIsNone(resultado.degradacao)
+        self.assertIn("Atuei em modulos ERP com Java (Spring Boot) sobre MySQL.", resultado.markdown)
+        self.assertNotIn("para inspecoes", resultado.markdown)
+        self.assertEqual({"bullet.rota.2", "resumo.2"}, {r.chave for r in diagnostico.descartadas})
+        self.assertTrue(any("reparo indisponivel" in linha for linha in logs.output))
+
+    def test_prazo_esgotado_na_primeira_chamada_continua_como_antes(self):
+        with ComClienteFalso(resposta(BOA)), _prazo_acaba_na_chamada(1):
+            with self.assertRaises(PrazoEsgotado):
+                generate_cv_pipeline(req_dev())
 
 
 if __name__ == "__main__":

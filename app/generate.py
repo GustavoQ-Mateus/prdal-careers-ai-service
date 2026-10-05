@@ -15,7 +15,7 @@ from .estrutura import (
     titulo_do_perfil,
 )
 from .fontes import Fonte, fontes_da_geracao
-from .llm import LLMUnavailable, complete_model, teto_de_requisicoes
+from .llm import LLMUnavailable, PrazoEsgotado, complete_model, teto_de_requisicoes
 from .orcamento import bullets_maximos, texto_orcamento
 from .renderizador import (
     experiencias_por_recencia,
@@ -216,7 +216,7 @@ def _julgar_relacao(rascunho: _Rascunho, ctx: _Contexto, chaves: list[str]) -> l
     ]
     try:
         notas = juiz_relacao.julgar(pedido)
-    except LLMUnavailable as exc:
+    except (LLMUnavailable, PrazoEsgotado) as exc:
         logger.warning("juiz de relacao indisponivel; seguindo sem ele: %s", exc)
         return None
     rejeitadas = []
@@ -465,7 +465,7 @@ def _reescrever(
     if rascunho.rejeitadas:
         try:
             diagnostico.reparadas = _reparar(rascunho, ctx, juiz)
-        except LLMUnavailable as exc:
+        except (LLMUnavailable, PrazoEsgotado) as exc:
             rascunho.descartadas.extend(rascunho.rejeitadas)
             logger.warning("reparo indisponivel; seguindo com as frases aceitas: %s", exc)
     diagnostico.descartadas = list(rascunho.descartadas)
