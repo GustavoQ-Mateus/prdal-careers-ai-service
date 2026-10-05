@@ -2,7 +2,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY apps/ai-service/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-ARG EMBED_MODEL=paraphrase-multilingual-MiniLM-L12-v2
+ARG EMBED_MODEL=intfloat/multilingual-e5-small
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBED_MODEL}')"
 COPY apps/ai-service/app ./app
 COPY apps/ai-service/scripts ./scripts

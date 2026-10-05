@@ -9,4 +9,3 @@ opentelemetry-sdk==1.45.0
 opentelemetry-exporter-otlp-proto-http==1.45.0
 transformers==5.18.0
 sentence-transformers==6.1.0
-chromadb-client==0.5.20

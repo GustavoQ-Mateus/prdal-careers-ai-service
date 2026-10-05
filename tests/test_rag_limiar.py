@@ -33,26 +33,26 @@ KEYWORDS = tuple(termo for termo, _ in PARES_RELEVANTES) + (
 class LimiarComModeloRealTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.consultas = {
-            termo: vetor
-            for termo, vetor in zip(KEYWORDS, rag._embeddings([rag.MOLDE_CONSULTA.format(t) for t in KEYWORDS]))
-        }
+        cls.limiar = rag.limiar_similaridade()
+        cls.consultas = dict(zip(KEYWORDS, rag.vetores_de_consultas(list(KEYWORDS))))
 
     def _similaridade(self, termo, texto):
-        vetor = rag._embeddings([texto])[0]
+        vetor = rag.vetores_de_documentos([texto])[0]
         return sum(a * b for a, b in zip(self.consultas[termo], vetor))
 
-    def test_teto_do_chunk_e_o_limite_do_modelo(self):
+    def test_teto_do_chunk_e_o_limite_do_modelo_e_comporta_o_chunk_inteiro(self):
         self.assertEqual(rag.limite_tokens(), rag._model().max_seq_length)
+        self.assertGreaterEqual(rag.limite_tokens(), 512)
+        rag.conferir_dimensao()
 
     def test_nota_que_trata_da_keyword_passa_do_limiar(self):
         for termo, texto in PARES_RELEVANTES:
-            self.assertGreaterEqual(self._similaridade(termo, texto), rag.LIMIAR_PADRAO, termo)
+            self.assertGreaterEqual(self._similaridade(termo, texto), self.limiar, termo)
 
     def test_nota_sem_relacao_fica_abaixo_do_limiar_para_toda_keyword(self):
         for texto in NOTAS_SEM_RELACAO:
             for termo in KEYWORDS:
-                self.assertLess(self._similaridade(termo, texto), rag.LIMIAR_PADRAO, (termo, texto))
+                self.assertLess(self._similaridade(termo, texto), self.limiar, (termo, texto))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app import rag
-from app.schemas import Documento
+from app.schemas import DocumentoParaEmbedding
 from app.text import normalize
 
 from ..nucleo import Uso, ler_json, media
@@ -16,11 +16,14 @@ PASTA = Path(__file__).resolve().parent
 TOPO = 5
 LIMITE_FALSO = 256
 PESO_CONSTANTE_FALSO = 0.3
-VARREDURA = (0.25, 0.275, 0.3, 0.325, 0.35, 0.375, 0.4)
+MOLDE_FALSO = "experiencia com {}"
+LIMIAR_FALSO = 0.35
+VARREDURA_FALSO = (0.25, 0.275, 0.3, 0.325, 0.35, 0.375, 0.4)
+PASSO_VARREDURA = 0.002
 
 
 def modelo(falso: bool) -> str:
-    return "falso" if falso else rag.MODEL_NAME
+    return "falso" if falso else rag.configuracao().nome
 
 
 def carregar() -> list[dict[str, Any]]:
@@ -42,42 +45,40 @@ def _embeddings_falsos(vocabulario: list[str]) -> Callable[[list[str]], list[lis
     return embutir
 
 
-def _ferramentas(caso: dict[str, Any], falso: bool) -> tuple[Callable[[list[str]], list[list[float]]], Callable[[str], int], int]:
+def _ferramentas(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
     if falso:
-        return _embeddings_falsos([c["termo"] for c in caso["consultas"]]), lambda texto: len(texto.split()), LIMITE_FALSO
+        falsos = _embeddings_falsos([c["termo"] for c in caso["consultas"]])
+        return {
+            "documentos": falsos,
+            "consultas": lambda termos: falsos([MOLDE_FALSO.format(t) for t in termos]),
+            "contar": lambda texto: len(texto.split()),
+            "limite": LIMITE_FALSO,
+        }
     if importlib.util.find_spec("sentence_transformers") is None:
         raise RuntimeError("sentence-transformers nao instalado; rode onde o modelo de embedding estiver disponivel")
-    return rag._embeddings, rag.contar_tokens, rag.limite_tokens()
+    return {"documentos": None, "consultas": rag.vetores_de_consultas, "contar": None, "limite": None}
 
 
-def _chunks(caso: dict[str, Any], contar: Callable[[str], int], limite: int) -> list[dict[str, Any]]:
-    chunks = []
-    for doc in caso["documentos"]:
-        documento = Documento(usuario_id="avaliacao", origem=doc["tipo"], origem_id=doc["id"], tipo=doc["tipo"], texto=doc["texto"])
-        partes = rag.dividir(doc["texto"], doc["tipo"], limite, contar)
-        for indice, parte in enumerate(partes):
-            chunks.append({
-                "id": rag.id_da_fonte(documento, indice, len(partes)),
-                "texto": parte,
-                "semRelacao": bool(doc.get("semRelacao")),
-            })
-    return chunks
+def _chunks(caso: dict[str, Any], ferramentas: dict[str, Any]) -> list[dict[str, Any]]:
+    documentos = [DocumentoParaEmbedding(id=doc["id"], origem_id=doc["id"], tipo=doc["tipo"], texto=doc["texto"]) for doc in caso["documentos"]]
+    sem_relacao = {doc["id"] for doc in caso["documentos"] if doc.get("semRelacao")}
+    chunks = rag.chunks_dos_documentos(documentos, ferramentas["limite"], ferramentas["contar"], ferramentas["documentos"])
+    return [{"id": c.fonte_id, "texto": c.texto, "vetor": c.vetor, "semRelacao": c.documento_id in sem_relacao} for c in chunks]
 
 
-def _produto(a: list[float], b: list[float]) -> float:
+def _cosseno(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
 
 
 def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
-    embutir, contar, limite = _ferramentas(caso, falso)
-    chunks = _chunks(caso, contar, limite)
-    vetores = embutir([c["texto"] for c in chunks])
+    ferramentas = _ferramentas(caso, falso)
+    chunks = _chunks(caso, ferramentas)
     consultas = caso["consultas"]
-    vetores_consulta = embutir([rag.MOLDE_CONSULTA.format(c["termo"]) for c in consultas])
-    limiar = rag.limiar_similaridade()
+    vetores_consulta = ferramentas["consultas"]([c["termo"] for c in consultas])
+    limiar = LIMIAR_FALSO if falso else rag.limiar_similaridade()
     detalhes = []
     for consulta, vetor in zip(consultas, vetores_consulta):
-        notas = [(chunk, round(_produto(vetor, v), 4)) for chunk, v in zip(chunks, vetores)]
+        notas = [(chunk, round(_cosseno(vetor, chunk["vetor"]), 4)) for chunk in chunks]
         topo = sorted(notas, key=lambda par: par[1], reverse=True)[:TOPO]
         acima = [chunk["id"] for chunk, nota in topo if nota >= limiar]
         esperados = consulta["esperados"]
@@ -99,7 +100,7 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
             "consultas": len(detalhes),
         },
         "uso": Uso(),
-        "detalhes": {"limiar": limiar, "embedding": "falso" if falso else rag.MODEL_NAME, "consultas": detalhes},
+        "detalhes": {"limiar": limiar, "embedding": modelo(falso), "consultas": detalhes},
     }
 
 
@@ -121,6 +122,15 @@ def _avaliar(consultas: list[dict[str, Any]], limiar: float) -> dict[str, Any]:
     }
 
 
+def _varredura(atual: float, menor_positivo: float, maior_negativo: float) -> list[float]:
+    if atual < 0.5:
+        return list(VARREDURA_FALSO)
+    inicio = min(menor_positivo, maior_negativo, atual) - 0.01
+    fim = max(menor_positivo, maior_negativo, atual) + 0.01
+    passos = int(round((fim - inicio) / PASSO_VARREDURA))
+    return [round(inicio + i * PASSO_VARREDURA, 3) for i in range(passos + 1)]
+
+
 def calibracao(resultados: list[dict[str, Any]]) -> dict[str, Any]:
     consultas = [c for r in resultados for c in r["detalhes"]["consultas"]]
     positivos = [n for c in consultas for n in c["positivos"]]
@@ -138,7 +148,7 @@ def calibracao(resultados: list[dict[str, Any]]) -> dict[str, Any]:
         "separavel": menor_positivo > maior_negativo,
         "limiarAtual": _avaliar(consultas, atual),
         "limiarSugerido": _avaliar(consultas, sugerido),
-        "varredura": [_avaliar(consultas, limiar) for limiar in VARREDURA],
+        "varredura": [_avaliar(consultas, limiar) for limiar in _varredura(atual, menor_positivo, maior_negativo)],
         "maiorNegativoPorTermo": sorted(
             ({"termo": c["termo"], "similaridade": max(c["negativos"])} for c in consultas if c["negativos"]),
             key=lambda item: item["similaridade"],

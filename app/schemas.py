@@ -286,51 +286,40 @@ class TaxonomiaResponse(CamelModel):
     niveis: list[str] = []
 
 
-class Documento(CamelModel):
-    usuario_id: str
-    origem: str
+class DocumentoParaEmbedding(CamelModel):
+    id: str
     origem_id: str
     tipo: TipoFonte = "nota"
-    factual: bool = False
-    titulo: str = ""
     texto: str
 
 
-class IngestRequest(CamelModel):
-    documentos: list[Documento]
-
-
-class ReplaceIngestRequest(CamelModel):
-    usuario_id: str
-    documentos: list[Documento]
-
-
-class IngestResponse(CamelModel):
-    indexados: int
-
-
-class QueryRequest(CamelModel):
-    usuario_id: str
-    query: str = ""
-    consultas: list[str] = []
-    k: int = 5
-
-    def todas(self) -> list[str]:
-        return self.consultas or [self.query]
-
-
-class Chunk(CamelModel):
-    id: str
-    tipo: TipoFonte
-    factual: bool = False
-    titulo: str = ""
+class ChunkComVetor(CamelModel):
+    documento_id: str
+    indice: int
+    fonte_id: str
     texto: str
-    origem: str = ""
-    similaridade: float | None = None
+    vetor: list[float]
 
 
-class QueryResponse(CamelModel):
-    chunks: list[Chunk]
+class EmbeddingDocumentosRequest(CamelModel):
+    documentos: list[DocumentoParaEmbedding] = Field(max_length=200)
+
+
+class EmbeddingDocumentosResponse(CamelModel):
+    modelo: str
+    dimensao: int
+    chunks: list[ChunkComVetor]
+
+
+class EmbeddingConsultasRequest(CamelModel):
+    consultas: list[str] = Field(max_length=50)
+
+
+class EmbeddingConsultasResponse(CamelModel):
+    modelo: str
+    dimensao: int
+    limiar: float
+    vetores: list[list[float]]
 
 
 class BlocoNativo(BaseModel):

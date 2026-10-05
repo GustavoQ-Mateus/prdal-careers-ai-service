@@ -48,7 +48,7 @@ from .llm import (
     exigir_modelo_no_boot,
     operacao,
 )
-from .rag import consultar, indexar, substituir
+from . import rag
 from .seguranca import (
     HEADER_SERVICO,
     exigir_servico,
@@ -63,14 +63,13 @@ from .schemas import (
     GenerateCvRequest,
     GenerateCvResponse,
     GeneratePipelineResponse,
-    IngestRequest,
-    IngestResponse,
+    EmbeddingConsultasRequest,
+    EmbeddingConsultasResponse,
+    EmbeddingDocumentosRequest,
+    EmbeddingDocumentosResponse,
     KeywordsRequest,
     KeywordsResponse,
-    QueryRequest,
-    QueryResponse,
     ReduzirCvRequest,
-    ReplaceIngestRequest,
     RedigirFormularioRequest,
     RedigirFormularioResponse,
     RedigirMensagemRequest,
@@ -93,12 +92,13 @@ logger = logging.getLogger(__name__)
 
 
 def _aquecer_embeddings() -> None:
+    rag.configuracao()
     try:
-        from .rag import _model
-
-        _model()
+        rag._model()
     except Exception as exc:
         logger.warning("aquecimento do modelo de embeddings adiado: %s", exc)
+        return
+    rag.conferir_dimensao()
 
 
 @asynccontextmanager
@@ -270,21 +270,31 @@ def classify_taxonomy() -> TaxonomiaResponse:
     return TaxonomiaResponse(**taxonomia())
 
 
-@app.post("/context/ingest", response_model=IngestResponse)
-def context_ingest(req: IngestRequest) -> IngestResponse:
-    return indexar(req.documentos)
+def _embedding_indisponivel(exc: Exception) -> HTTPException:
+    logger.warning("degradacao codigo=embedding_indisponivel causa=%s", exc)
+    return HTTPException(status_code=503, detail="modelo de embedding indisponivel")
 
 
-@app.post("/context/replace", response_model=IngestResponse)
-def context_replace(req: ReplaceIngestRequest) -> IngestResponse:
-    if any(documento.usuario_id != req.usuario_id for documento in req.documentos):
-        raise HTTPException(status_code=400, detail="replace exige documentos do usuario informado")
-    return substituir(req.usuario_id, req.documentos)
+@app.post("/embeddings/documentos", response_model=EmbeddingDocumentosResponse)
+def embeddings_documentos(req: EmbeddingDocumentosRequest) -> EmbeddingDocumentosResponse:
+    modelo = rag.configuracao()
+    try:
+        chunks = rag.chunks_dos_documentos(req.documentos)
+    except Exception as exc:
+        raise _embedding_indisponivel(exc) from exc
+    return EmbeddingDocumentosResponse(modelo=modelo.nome, dimensao=modelo.dimensao, chunks=chunks)
 
 
-@app.post("/context/query", response_model=QueryResponse)
-def context_query(req: QueryRequest) -> QueryResponse:
-    return consultar(req.usuario_id, req.todas(), req.k)
+@app.post("/embeddings/consultas", response_model=EmbeddingConsultasResponse)
+def embeddings_consultas(req: EmbeddingConsultasRequest) -> EmbeddingConsultasResponse:
+    modelo = rag.configuracao()
+    try:
+        vetores = rag.vetores_de_consultas(req.consultas)
+    except Exception as exc:
+        raise _embedding_indisponivel(exc) from exc
+    return EmbeddingConsultasResponse(
+        modelo=modelo.nome, dimensao=modelo.dimensao, limiar=rag.limiar_similaridade(), vetores=vetores
+    )
 
 
 @app.post("/copiloto/turn", response_model=TurnResponse)

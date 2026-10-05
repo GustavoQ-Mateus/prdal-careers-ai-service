@@ -9,60 +9,54 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.schemas import Chunk, IngestResponse, QueryResponse
 from app.seguranca import HEADER_SERVICO, TokenServicoAusente, exigir_token_no_boot
 
 TOKEN = "token-de-servico-de-teste-com-mais-de-32-bytes"
 PRODUCAO = {"PRDAL_AMBIENTE": "producao", "SERVICE_TOKEN": TOKEN}
 RAIZ = Path(__file__).resolve().parents[1]
 
-CONSULTA = {"usuarioId": "usuario-vitima", "query": "pretensao salarial", "k": 5}
-SUBSTITUICAO = {"usuarioId": "usuario-vitima", "documentos": []}
+CONSULTA = {"consultas": ["pretensao salarial"]}
+DOCUMENTOS = {"documentos": [{"id": "d1", "origemId": "resumo", "tipo": "resumo", "texto": "nota privada"}]}
 
 
-def _consulta_falsa(*_args, **_kwargs):
-    return QueryResponse(chunks=[Chunk(id="n1", tipo="nota", texto="nota privada", origem="nota", titulo="Nota")])
+def _vetores_falsos(textos):
+    return [[0.1] * 384 for _ in textos]
 
 
-@patch("app.main.substituir", return_value=IngestResponse(indexados=0))
-@patch("app.main.consultar", side_effect=_consulta_falsa)
+@patch("app.main.rag._vetores", side_effect=_vetores_falsos)
 @patch.dict(os.environ, PRODUCAO)
 class ServicoAutenticadoTest(unittest.TestCase):
     def setUp(self):
         self.cliente = TestClient(app)
 
-    def test_context_query_sem_header_retorna_401_e_nao_consulta(self, consultar, _substituir):
-        resposta = self.cliente.post("/context/query", json=CONSULTA)
-        self.assertEqual(resposta.status_code, 401)
-        consultar.assert_not_called()
+    def test_embeddings_sem_header_retornam_401_e_nao_calculam(self, vetores):
+        for rota, corpo in (("/embeddings/consultas", CONSULTA), ("/embeddings/documentos", DOCUMENTOS)):
+            resposta = self.cliente.post(rota, json=corpo)
+            self.assertEqual(resposta.status_code, 401, rota)
+        vetores.assert_not_called()
 
-    def test_context_replace_sem_header_retorna_401_e_nao_apaga(self, _consultar, substituir):
-        resposta = self.cliente.post("/context/replace", json=SUBSTITUICAO)
-        self.assertEqual(resposta.status_code, 401)
-        substituir.assert_not_called()
-
-    def test_token_errado_retorna_401(self, consultar, _substituir):
+    def test_token_errado_retorna_401(self, vetores):
         for errado in ("", "x", TOKEN[:-1], TOKEN + "x", TOKEN.upper()):
-            resposta = self.cliente.post("/context/query", json=CONSULTA, headers={HEADER_SERVICO: errado})
+            resposta = self.cliente.post("/embeddings/consultas", json=CONSULTA, headers={HEADER_SERVICO: errado})
             self.assertEqual(resposta.status_code, 401, errado)
-        consultar.assert_not_called()
+        vetores.assert_not_called()
 
-    def test_com_header_correto_funciona(self, consultar, substituir):
+    def test_com_header_correto_funciona(self, vetores):
         cabecalho = {HEADER_SERVICO: TOKEN}
-        consulta = self.cliente.post("/context/query", json=CONSULTA, headers=cabecalho)
+        consulta = self.cliente.post("/embeddings/consultas", json=CONSULTA, headers=cabecalho)
         self.assertEqual(consulta.status_code, 200)
-        self.assertEqual(consulta.json()["chunks"][0]["texto"], "nota privada")
-        substituicao = self.cliente.post("/context/replace", json=SUBSTITUICAO, headers=cabecalho)
-        self.assertEqual(substituicao.status_code, 200)
-        consultar.assert_called_once()
-        substituir.assert_called_once()
+        self.assertEqual(len(consulta.json()["vetores"]), 1)
+        documentos = self.cliente.post("/embeddings/documentos", json=DOCUMENTOS, headers=cabecalho)
+        self.assertEqual(documentos.status_code, 200)
+        self.assertEqual(documentos.json()["chunks"][0]["texto"], "nota privada")
+        self.assertEqual(vetores.call_count, 2)
 
-    def test_ingest_e_geracao_tambem_exigem_header(self, _consultar, _substituir):
-        for rota in ("/context/ingest", "/generate-cv-pipeline", "/copiloto/turn", "/keywords", "/hello"):
+    def test_geracao_tambem_exige_header(self, _vetores):
+        for rota in ("/generate-cv-pipeline", "/copiloto/turn", "/keywords", "/hello"):
             resposta = self.cliente.post(rota, json={}) if rota != "/hello" else self.cliente.get(rota)
             self.assertEqual(resposta.status_code, 401, rota)
 
-    def test_health_continua_publico(self, _consultar, _substituir):
+    def test_health_continua_publico(self, _vetores):
         self.assertEqual(self.cliente.get("/health").status_code, 200)
 
 
@@ -85,7 +79,7 @@ class BootSemTokenTest(unittest.TestCase):
         os.environ.pop("PRDAL_AMBIENTE", None)
         with self.assertRaises(TokenServicoAusente):
             exigir_token_no_boot()
-        self.assertEqual(TestClient(app).post("/context/query", json=CONSULTA).status_code, 401)
+        self.assertEqual(TestClient(app).post("/embeddings/consultas", json=CONSULTA).status_code, 401)
 
     @patch.dict(os.environ, {"PRDAL_AMBIENTE": "desenvolvimento", "SERVICE_TOKEN": ""})
     def test_em_desenvolvimento_sobe_sem_token(self):

@@ -1,45 +1,17 @@
 import os
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi.testclient import TestClient
+
 from app import rag
-from app.schemas import Documento
+from app.main import app
+from app.schemas import DocumentoParaEmbedding
 
 
 def _contar_palavras(texto: str) -> int:
     return len(texto.split())
-
-
-class _ColecaoFalsa:
-    def __init__(self, respostas):
-        self.respostas = respostas
-        self.consultas = []
-        self.adicionados = []
-
-    def query(self, **kwargs):
-        self.consultas.append(kwargs)
-        n = len(kwargs["query_embeddings"])
-        docs, metas, dists = [], [], []
-        for i in range(n):
-            linhas = self.respostas[i] if i < len(self.respostas) else []
-            docs.append([texto for texto, _, _ in linhas])
-            metas.append([meta for _, meta, _ in linhas])
-            dists.append([dist for _, _, dist in linhas])
-        return {"documents": docs, "metadatas": metas, "distances": dists}
-
-    def delete(self, **_):
-        pass
-
-    def add(self, **kwargs):
-        self.adicionados.append(kwargs)
-
-
-def _meta(fonte_id, tipo, factual):
-    return {"fonteId": fonte_id, "origemId": fonte_id, "tipo": tipo, "factual": factual, "titulo": fonte_id, "origem": "perfil"}
-
-
-def _distancia(similaridade):
-    return 2.0 * (1.0 - similaridade)
 
 
 class DivisaoTest(unittest.TestCase):
@@ -73,66 +45,101 @@ class DivisaoTest(unittest.TestCase):
             self.assertEqual(rag.limite_tokens(), 7)
 
     def test_id_da_experiencia_e_o_id_do_perfil_e_nota_numera_os_pedacos(self):
-        experiencia = Documento(usuario_id="u", origem="perfil", origem_id="exp-a", tipo="experiencia", factual=True, texto="x")
-        nota = Documento(usuario_id="u", origem="nota", origem_id="n1", tipo="nota", texto="x")
-        self.assertEqual(rag.id_da_fonte(experiencia, 0, 1), "exp-a")
-        self.assertEqual(rag.id_da_fonte(nota, 0, 1), "n1")
-        self.assertEqual(rag.id_da_fonte(nota, 1, 3), "n1#2")
-
-    def test_indexacao_grava_tipo_factual_e_id_da_fonte(self):
-        colecao = _ColecaoFalsa([])
-        doc = Documento(usuario_id="u", origem="perfil", origem_id="exp-a", tipo="experiencia", factual=True, titulo="T", texto="Analista de dados")
-        with patch.object(rag, "_collection", return_value=colecao), patch.object(rag, "_embeddings", side_effect=lambda t: [[0.0]] * len(t)):
-            rag.indexar([doc])
-        meta = colecao.adicionados[0]["metadatas"][0]
-        self.assertEqual((meta["fonteId"], meta["tipo"], meta["factual"]), ("exp-a", "experiencia", True))
+        self.assertEqual(rag.id_da_fonte("exp-a", "experiencia", 0, 1), "exp-a")
+        self.assertEqual(rag.id_da_fonte("n1", "nota", 0, 1), "n1")
+        self.assertEqual(rag.id_da_fonte("n1", "nota", 1, 3), "n1#2")
 
 
-class ConsultaTest(unittest.TestCase):
-    def _consultar(self, respostas, consultas, limiar=None):
-        colecao = _ColecaoFalsa(respostas)
-        ambiente = {"RAG_LIMIAR_SIMILARIDADE": str(limiar)} if limiar is not None else {}
-        with patch.object(rag, "_collection", return_value=colecao), patch.object(
-            rag, "_embeddings", side_effect=lambda textos: [[0.0]] * len(textos)
-        ), patch.dict(os.environ, ambiente):
-            return rag.consultar("u", consultas, 5), colecao
-
-    def test_uma_consulta_por_keyword_com_uniao_e_deduplicacao(self):
-        respostas = [
-            [("SQL e Power BI", _meta("exp-a", "experiencia", True), _distancia(0.7))],
-            [("SQL e Power BI", _meta("exp-a", "experiencia", True), _distancia(0.8)), ("Python", _meta("skills", "skills", True), _distancia(0.6))],
+class ChunksTest(unittest.TestCase):
+    def test_chunks_levam_documento_indice_fonte_e_vetor_sem_guardar_nada(self):
+        documentos = [
+            DocumentoParaEmbedding(id="d1", origem_id="exp-a", tipo="experiencia", texto="Analista de dados"),
+            DocumentoParaEmbedding(id="d2", origem_id="n1", tipo="nota", texto="Primeiro.\n\nSegundo."),
+            DocumentoParaEmbedding(id="d3", origem_id="n2", tipo="nota", texto="   "),
         ]
-        resultado, colecao = self._consultar(respostas, ["SQL", "Power BI", "sql", " "])
-        self.assertEqual(len(colecao.consultas[0]["query_embeddings"]), 2)
-        self.assertEqual([c.id for c in resultado.chunks], ["exp-a", "skills"])
-        self.assertEqual(resultado.chunks[0].similaridade, 0.8)
-        self.assertEqual(resultado.chunks[0].tipo, "experiencia")
-        self.assertTrue(resultado.chunks[0].factual)
+        embutidos = []
 
-    def test_consultas_respeitam_o_teto(self):
-        _, colecao = self._consultar([], [f"termo {i}" for i in range(40)])
-        self.assertEqual(len(colecao.consultas[0]["query_embeddings"]), rag.TETO_CONSULTAS)
+        def embutir(textos):
+            embutidos.append(textos)
+            return [[float(i)] for i in range(len(textos))]
 
-    def test_chunk_abaixo_do_limiar_nao_entra(self):
-        respostas = [[
-            ("quero estudar Kubernetes", _meta("n1", "nota", False), _distancia(0.2)),
-            ("Modelei paineis em Power BI", _meta("exp-a", "experiencia", True), _distancia(0.5)),
-        ]]
-        resultado, _ = self._consultar(respostas, ["Power BI"], limiar=0.35)
-        self.assertEqual([c.id for c in resultado.chunks], ["exp-a"])
+        chunks = rag.chunks_dos_documentos(documentos, limite=50, contar=_contar_palavras, embutir=embutir)
+        self.assertEqual(embutidos, [["Analista de dados", "Primeiro.", "Segundo."]])
+        self.assertEqual(
+            [(c.documento_id, c.indice, c.fonte_id, c.vetor) for c in chunks],
+            [("d1", 0, "exp-a", [0.0]), ("d2", 0, "n1#1", [1.0]), ("d2", 1, "n1#2", [2.0])],
+        )
 
-    def test_limiar_vem_do_ambiente_e_valor_invalido_usa_o_padrao(self):
-        with patch.dict(os.environ, {"RAG_LIMIAR_SIMILARIDADE": "0.6"}):
-            self.assertEqual(rag.limiar_similaridade(), 0.6)
-        with patch.dict(os.environ, {"RAG_LIMIAR_SIMILARIDADE": "muito"}):
-            self.assertEqual(rag.limiar_similaridade(), rag.LIMIAR_PADRAO)
-        with patch.dict(os.environ, {"RAG_LIMIAR_SIMILARIDADE": "7"}):
-            self.assertEqual(rag.limiar_similaridade(), rag.LIMIAR_PADRAO)
+    def test_documento_e_consulta_recebem_os_prefixos_do_modelo(self):
+        recebidos = []
 
-    def test_sem_consulta_nao_vai_ao_chroma(self):
-        resultado, colecao = self._consultar([], ["", "  "])
-        self.assertEqual(resultado.chunks, [])
-        self.assertEqual(colecao.consultas, [])
+        def codificar(textos, normalize_embeddings):
+            self.assertTrue(normalize_embeddings)
+            recebidos.append(textos)
+            return SimpleNamespace(tolist=lambda: [[1.0]] * len(textos))
+
+        with patch.object(rag, "_model", return_value=SimpleNamespace(encode=codificar)), patch.dict(os.environ, {"EMBED_MODEL": "intfloat/multilingual-e5-small"}):
+            rag.vetores_de_documentos(["Docker em producao"])
+            rag.vetores_de_consultas([" Docker "])
+            self.assertEqual(rag.vetores_de_consultas([]), [])
+        self.assertEqual(recebidos, [["passage: Docker em producao"], ["query: experiência com Docker"]])
+
+
+class ConfiguracaoTest(unittest.TestCase):
+    def test_modelo_padrao_e_e5_small_e_desconhecido_e_recusado(self):
+        with patch.dict(os.environ, {"EMBED_MODEL": ""}):
+            self.assertEqual(rag.configuracao().nome, "intfloat/multilingual-e5-small")
+        with patch.dict(os.environ, {"EMBED_MODEL": "modelo-sem-calibracao"}), self.assertRaises(rag.ModeloDesconhecido):
+            rag.configuracao()
+
+    def test_limiar_vem_do_modelo_e_o_ambiente_sobrepoe(self):
+        with patch.dict(os.environ, {"EMBED_MODEL": "intfloat/multilingual-e5-small"}):
+            os.environ.pop("RAG_LIMIAR_SIMILARIDADE", None)
+            self.assertEqual(rag.limiar_similaridade(), 0.864)
+            with patch.dict(os.environ, {"RAG_LIMIAR_SIMILARIDADE": "0.9"}):
+                self.assertEqual(rag.limiar_similaridade(), 0.9)
+            for invalido in ("muito", "7"):
+                with patch.dict(os.environ, {"RAG_LIMIAR_SIMILARIDADE": invalido}):
+                    self.assertEqual(rag.limiar_similaridade(), 0.864)
+
+    def test_dimensao_diferente_da_do_banco_derruba_o_boot(self):
+        modelo = SimpleNamespace(get_embedding_dimension=lambda: 768)
+        with patch.object(rag, "_model", return_value=modelo), patch.dict(os.environ, {"EMBED_MODEL": "intfloat/multilingual-e5-small", "EMBED_DIMENSAO": "384"}):
+            with self.assertRaises(rag.DimensaoIncompativel):
+                rag.conferir_dimensao()
+        modelo = SimpleNamespace(get_embedding_dimension=lambda: 384)
+        with patch.object(rag, "_model", return_value=modelo), patch.dict(os.environ, {"EMBED_MODEL": "intfloat/multilingual-e5-small", "EMBED_DIMENSAO": "768"}):
+            with self.assertRaises(rag.DimensaoIncompativel):
+                rag.conferir_dimensao()
+        with patch.object(rag, "_model", return_value=modelo), patch.dict(os.environ, {"EMBED_DIMENSAO": "384"}):
+            rag.conferir_dimensao()
+
+
+class RotasTest(unittest.TestCase):
+    def setUp(self):
+        self.cliente = TestClient(app)
+
+    def test_rotas_devolvem_modelo_dimensao_e_limiar(self):
+        with patch.object(rag, "_vetores", side_effect=lambda textos: [[0.5] * 384 for _ in textos]), patch.dict(os.environ, {"EMBED_MODEL": ""}):
+            docs = self.cliente.post("/embeddings/documentos", json={"documentos": [{"id": "d1", "origemId": "exp-a", "tipo": "experiencia", "texto": "SQL"}]})
+            consultas = self.cliente.post("/embeddings/consultas", json={"consultas": ["SQL", "Power BI"]})
+        self.assertEqual(docs.status_code, 200)
+        corpo = docs.json()
+        self.assertEqual((corpo["modelo"], corpo["dimensao"]), ("intfloat/multilingual-e5-small", 384))
+        self.assertEqual(corpo["chunks"][0]["documentoId"], "d1")
+        self.assertEqual(corpo["chunks"][0]["fonteId"], "exp-a")
+        self.assertEqual(len(consultas.json()["vetores"]), 2)
+        self.assertEqual(consultas.json()["limiar"], 0.864)
+
+    def test_modelo_fora_responde_503(self):
+        with patch.object(rag, "_vetores", side_effect=OSError("sem modelo")):
+            resposta = self.cliente.post("/embeddings/consultas", json={"consultas": ["SQL"]})
+        self.assertEqual(resposta.status_code, 503)
+        self.assertNotIn("sem modelo", resposta.text)
+
+    def test_rotas_antigas_de_contexto_nao_existem_mais(self):
+        for rota in ("/context/ingest", "/context/replace", "/context/query"):
+            self.assertEqual(self.cliente.post(rota, json={}).status_code, 404, rota)
 
 
 if __name__ == "__main__":

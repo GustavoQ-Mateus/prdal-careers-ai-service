@@ -1,16 +1,11 @@
 import logging
-import os
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-
-import httpx
 
 from . import rag
 from .carregador_prompts import PROMPTS_OBRIGATORIOS, PromptAusente, obter
 from .llm import _credencial_presente, modelo_configurado
 from .observabilidade import request_id_atual
-
-PRAZO_PADRAO_S = 2.0
 
 logger = logging.getLogger("prdal.prontidao")
 
@@ -24,14 +19,6 @@ class SituacaoDependencia:
 
     def como_dict(self) -> dict[str, object]:
         return {chave: valor for chave, valor in asdict(self).items() if chave != "detalhe"}
-
-
-def _prazo_s() -> float:
-    try:
-        valor = float(os.getenv("PRONTIDAO_TIMEOUT_S", ""))
-    except ValueError:
-        return PRAZO_PADRAO_S
-    return valor if valor > 0 else PRAZO_PADRAO_S
 
 
 def _verificar(nome: str, obrigatoria: bool, sonda: Callable[[], None]) -> SituacaoDependencia:
@@ -57,11 +44,6 @@ def _claude() -> None:
         raise RuntimeError("ANTHROPIC_API_KEY ausente")
 
 
-def _chroma() -> None:
-    resposta = httpx.get(f"http://{rag.CHROMA_HOST}:{rag.CHROMA_PORT}/api/v1/heartbeat", timeout=_prazo_s())
-    resposta.raise_for_status()
-
-
 def _embeddings() -> None:
     if not rag._model.cache_info().currsize:
         raise RuntimeError("modelo de embeddings nao carregado")
@@ -71,7 +53,6 @@ def prontidao() -> tuple[bool, dict[str, object]]:
     dependencias = [
         _verificar("prompts", True, _prompts),
         _verificar("claude", True, _claude),
-        _verificar("chroma", False, _chroma),
         _verificar("embeddings", False, _embeddings),
     ]
     pronto = all(d.estado == "ok" for d in dependencias if d.obrigatoria)
