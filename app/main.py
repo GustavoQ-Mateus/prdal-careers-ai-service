@@ -1,13 +1,11 @@
 import contextvars
 import json
 import logging
-import os
 import queue
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -50,11 +48,9 @@ from .llm import (
 )
 from . import rag
 from .seguranca import (
-    HEADER_SERVICO,
     exigir_servico,
     exigir_token_no_boot,
     rotas_de_documentacao,
-    token_servico,
 )
 from .schemas import (
     ClassifyRequest,
@@ -86,7 +82,6 @@ from .schemas import (
 )
 from .score import calcular_score
 
-DOC_SERVICE_URL = os.getenv("DOC_SERVICE_URL", "http://localhost:8080")
 HEADER_PRAZO = "X-Prdal-Prazo-Ms"
 HEADER_OPERACAO = "X-Prdal-Operacao"
 ESPERA_DA_FILA_S = 0.25
@@ -168,17 +163,6 @@ class HealthResponse(BaseModel):
     status: str = "ok"
 
 
-class HelloHop(BaseModel):
-    service: str
-    message: str
-
-
-class HelloResponse(BaseModel):
-    service: str
-    message: str
-    chain: list[HelloHop]
-
-
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
@@ -188,23 +172,6 @@ def health() -> HealthResponse:
 def ready() -> JSONResponse:
     pronto, corpo = prontidao()
     return JSONResponse(status_code=200 if pronto else 503, content=corpo)
-
-
-@app.get("/hello", response_model=HelloResponse)
-async def hello() -> HelloResponse:
-    hop = HelloHop(service="ai-service", message="hello from ai-service")
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        resp = await client.get(
-            f"{DOC_SERVICE_URL}/hello",
-            headers={HEADER_SERVICO: token_servico()},
-        )
-        resp.raise_for_status()
-        downstream = HelloResponse.model_validate(resp.json())
-    return HelloResponse(
-        service="ai-service",
-        message=hop.message,
-        chain=[hop, *downstream.chain],
-    )
 
 
 @app.post("/keywords", response_model=KeywordsResponse)
