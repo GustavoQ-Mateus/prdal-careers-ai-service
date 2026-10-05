@@ -5,6 +5,7 @@ import queue
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -67,6 +68,7 @@ from .schemas import (
     FiltroTrechosResponse,
     KeywordsRequest,
     KeywordsResponse,
+    Keyword,
     ReduzirCvRequest,
     RedigirFormularioRequest,
     RedigirFormularioResponse,
@@ -159,8 +161,20 @@ def _indisponivel(degradacao: Degradacao, exc: Exception, op: Operacao) -> JSONR
 
 
 class HealthResponse(BaseModel):
-    service: str = "ai-service"
-    status: str = "ok"
+    service: Literal["ai-service"] = "ai-service"
+    status: Literal["ok"] = "ok"
+
+
+class DependenciaResponse(BaseModel):
+    nome: str
+    obrigatoria: bool
+    estado: Literal["ok", "indisponivel", "desconhecido"]
+
+
+class ProntidaoResponse(BaseModel):
+    servico: Literal["ai-service"]
+    status: Literal["pronto", "indisponivel"]
+    dependencias: list[DependenciaResponse]
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -168,7 +182,7 @@ def health() -> HealthResponse:
     return HealthResponse()
 
 
-@app.get("/ready")
+@app.get("/ready", response_model=ProntidaoResponse, responses={503: {"model": ProntidaoResponse}})
 def ready() -> JSONResponse:
     pronto, corpo = prontidao()
     return JSONResponse(status_code=200 if pronto else 503, content=corpo)
@@ -209,7 +223,33 @@ class InterpretarLoteRequest(BaseModel):
     resultados: list[ResultadoLote]
 
 
-@app.post("/keywords/lote/preparar")
+class PedidoLoteResponse(BaseModel):
+    id: str
+    params: dict
+
+
+class ErroLoteResponse(BaseModel):
+    id: str
+    erro: str
+
+
+class PrepararLoteResponse(BaseModel):
+    pedidos: list[PedidoLoteResponse]
+    erros: list[ErroLoteResponse]
+
+
+class ItemLoteResponse(BaseModel):
+    id: str
+    status: Literal["VALIDAS", "PENDENTE"]
+    keywords: list[Keyword]
+    erro: str | None
+
+
+class InterpretarLoteResponse(BaseModel):
+    itens: list[ItemLoteResponse]
+
+
+@app.post("/keywords/lote/preparar", response_model=PrepararLoteResponse)
 def preparar_keywords_lote(req: PrepararLoteRequest) -> dict:
     pedidos = []
     erros = []
@@ -221,7 +261,7 @@ def preparar_keywords_lote(req: PrepararLoteRequest) -> dict:
     return {"pedidos": pedidos, "erros": erros}
 
 
-@app.post("/keywords/lote/interpretar")
+@app.post("/keywords/lote/interpretar", response_model=InterpretarLoteResponse)
 def interpretar_keywords_lote(req: InterpretarLoteRequest) -> dict:
     itens = []
     for item in req.resultados:
@@ -369,7 +409,7 @@ def _pendentes(fila: "queue.Queue[str | None]") -> list[str]:
         linhas.append(linha)
 
 
-@app.post("/copiloto/turn/stream")
+@app.post("/copiloto/turn/stream", response_class=StreamingResponse, responses={200: {"content": {"application/x-ndjson": {"schema": {"type": "string"}}}}})
 def copiloto_turn_stream(req: TurnRequest, request: Request) -> StreamingResponse:
     prazo_ms = _prazo_ms(request.headers.get(HEADER_PRAZO))
     operacao_id = request.headers.get(HEADER_OPERACAO)
