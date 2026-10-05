@@ -1,10 +1,10 @@
 import unittest
 
-from app.casamento import canonico, casar_termo, termo_presente
+from app.casamento import canonico, casar_termo, sustentacao, termo_presente, termo_sustentado
 from app.fontes import fontes_da_geracao
-from app.generate import _analise
+from app.generate import _analise, _bloco_keywords
 from app.schemas import FraseFonte, GenerateCvRequest
-from app.verificacao import motivo_da_rejeicao, termos_reconhecidos
+from app.verificacao import motivo_da_competencia, motivo_da_rejeicao, termos_reconhecidos
 
 
 def _req(keywords: list[str], skills: list[str]) -> GenerateCvRequest:
@@ -67,6 +67,7 @@ class CasamentoTest(unittest.TestCase):
             (".NET", "dotnet"),
             ("C#", "CSharp"),
             ("CI/CD", "CICD"),
+            ("Microsserviços", "Arquitetura de microsserviços"),
         ]
         for termo, texto in pares:
             with self.subTest(termo=termo, texto=texto):
@@ -109,6 +110,38 @@ class CasamentoTest(unittest.TestCase):
                 self.assertIn(f"Cobertura {nivel}", veredicto)
                 for proibida in ("filtro", "elimin", "passa", "aprov"):
                     self.assertNotIn(proibida, veredicto.lower())
+
+
+class SustentacaoPorTermoEspecificoTest(unittest.TestCase):
+    def test_termo_abrangente_e_sustentado_pelo_especifico_mas_nao_o_contrario(self):
+        self.assertEqual(sustentacao("Metodologias ágeis", "Cerimonias ageis (Scrum/Kanban)."), ("Scrum", "Kanban"))
+        self.assertTrue(termo_sustentado("Testes automatizados", "Testes com pytest e Playwright."))
+        self.assertFalse(termo_sustentado("Scrum", "Uso metodologias ageis no time."))
+        self.assertFalse(termo_sustentado("Jest", "Testes com pytest."))
+        self.assertFalse(termo_sustentado("Scrum", "Quadro Kanban do time."))
+
+    def test_score_e_analise_continuam_literais(self):
+        req = _req(["Metodologias ágeis", "Jest"], [])
+        analise = _analise("## RESUMO PROFISSIONAL\nScrum e pytest no dia a dia.\n", req)
+        self.assertEqual(analise.keywords_encontradas, [])
+
+    def test_pedido_diz_como_a_keyword_esta_escrita_na_fonte(self):
+        req = _req(["Metodologias ágeis", "Testes automatizados", "CloudFormation"], ["Scrum", "Kanban", "pytest"])
+        bloco = _bloco_keywords(req, fontes_da_geracao(req))
+        self.assertIn("Metodologias ágeis (peso 1): fontes factuais: skills (escrita na fonte como Scrum, Kanban)", bloco)
+        self.assertIn("Testes automatizados (peso 1): fontes factuais: skills (escrita na fonte como pytest)", bloco)
+        self.assertIn("CloudFormation (peso 1): sem fonte factual, nao use", bloco)
+
+    def test_frase_com_termo_abrangente_passa_e_especifico_inventado_nao(self):
+        req = _req(["Metodologias ágeis", "Testes automatizados", "Jest"], ["Scrum", "pytest"])
+        fontes, termos = fontes_da_geracao(req), termos_reconhecidos(req)
+        frase = FraseFonte(texto="Metodologias ageis (Scrum) e testes automatizados com pytest.", fontes=["skills"])
+        self.assertIsNone(motivo_da_rejeicao(frase, fontes, termos))
+        inventada = FraseFonte(texto="Testes automatizados com Jest.", fontes=["skills"])
+        self.assertIn("Jest", motivo_da_rejeicao(inventada, fontes, termos))
+        self.assertIsNone(motivo_da_competencia("Testes automatizados", "skills", fontes))
+        self.assertIsNotNone(motivo_da_competencia("Jest", "skills", fontes))
+        self.assertIsNotNone(motivo_da_competencia("Kanban", "skills", fontes))
 
 
 if __name__ == "__main__":

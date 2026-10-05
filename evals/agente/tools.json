@@ -195,7 +195,7 @@
     },
     {
       "name": "listar_banco_vagas",
-      "description": "Lista o banco de vagas importadas",
+      "description": "Lista o banco de vagas importadas que ainda estao em entrada, sem ativar",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -279,7 +279,7 @@
     },
     {
       "name": "ativar_banco_vaga",
-      "description": "Ativa uma vaga do banco de vagas como oportunidade",
+      "description": "Ativa uma vaga do banco de vagas, que esta em entrada, como oportunidade",
       "input_schema": {
         "type": "object",
         "properties": {

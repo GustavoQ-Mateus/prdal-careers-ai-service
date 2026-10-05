@@ -130,6 +130,7 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
 
     sem_fonte = metricas_sem_fonte(frases, textos)
     proibidos = [termo for termo in caso.get("termosProibidos", []) if termo_presente(termo, resposta.markdown)]
+    sustentados_ausentes = [termo for termo in caso.get("termosSustentados", []) if not termo_presente(termo, resposta.markdown)]
     formato = violacoes_de_formato(resposta.markdown, estrutura, req)
     keywords = [k.termo for k in req.keywords if k.termo.strip()]
     reais = [nota for chave, nota in notas.items() if not chave.startswith("sonda.")]
@@ -157,6 +158,7 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
         "reprovadas_juiz_producao": len(reprovadas),
         "metrica_sem_fonte": len(sem_fonte),
         "termos_proibidos_presentes": len(proibidos),
+        "termos_sustentados_ausentes": len(sustentados_ausentes),
         "cobertura_keywords": round(len(resposta.analise_final.keywords_encontradas) / len(keywords), 4) if keywords else None,
         "requisicoes": uso_geracao.requisicoes,
         "violacoes_formato": len(formato),
@@ -180,6 +182,7 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
             "descartadas": [{"chave": r.chave, "texto": r.texto, "motivo": r.motivo} for r in diagnostico.descartadas],
             "metricasSemFonte": sem_fonte,
             "termosProibidosPresentes": proibidos,
+            "termosSustentadosAusentes": sustentados_ausentes,
             "violacoesFormato": formato,
             "degradacao": resposta.degradacao,
             "notasDoJuiz": [
@@ -211,6 +214,7 @@ def resumir(resultados: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "metrica_sem_fonte": soma("metrica_sem_fonte"),
         "termos_proibidos_presentes": soma("termos_proibidos_presentes"),
+        "termos_sustentados_ausentes": soma("termos_sustentados_ausentes"),
         "violacoes_formato": soma("violacoes_formato"),
         "degradadas": soma("degradada"),
         "cobertura_keywords": media(valores("cobertura_keywords")),

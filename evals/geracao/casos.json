@@ -287,5 +287,113 @@
       {"id": "nota-python", "tipo": "nota", "factual": true, "titulo": "Projeto no Varejo Exemplo", "texto": "No Varejo Exemplo escrevi scripts em Python para limpar as planilhas de vendas antes de carregar no Power BI."}
     ],
     "termosProibidos": []
+  },
+  {
+    "id": "keyword_sustentada_por_termo_especifico",
+    "mede": "vaga pede termos abrangentes que o perfil sustenta por termos especificos (Scrum e Kanban, pytest e Playwright) ou por sinonimo (Microsservicos): o curriculo escreve o termo da vaga junto do termo da fonte e o que o perfil nao sustenta (CloudFormation) fica de fora",
+    "perfil": {
+      "nome": "Pessoa Exemplo Oito",
+      "emails": [
+        {
+          "valor": "pessoa.oito@exemplo.dev",
+          "principal": true
+        }
+      ],
+      "endereco": {
+        "pais": "Brasil",
+        "estado": "PR",
+        "cidade": "Curitiba"
+      },
+      "resumo": "Desenvolvedora full stack com Python e TypeScript.",
+      "experiencias": [
+        {
+          "id": "loja",
+          "empresa": "Loja Exemplo",
+          "cargo": "Desenvolvedora Full Stack",
+          "dataInicioMes": 3,
+          "dataInicioAno": 2023,
+          "atual": true,
+          "descricao": "- Desenvolvi servicos em Python na AWS para o catalogo da loja.\n- Participei das cerimonias ageis (Scrum/Kanban) do time de produto.\n- Escrevi testes (pytest, Vitest, Playwright) cobrindo fluxos criticos do checkout."
+        },
+        {
+          "id": "agencia",
+          "empresa": "Agencia Exemplo",
+          "cargo": "Desenvolvedora Junior",
+          "dataInicioMes": 2,
+          "dataInicioAno": 2021,
+          "dataFimMes": 2,
+          "dataFimAno": 2023,
+          "descricao": "- Mantive paginas em TypeScript para campanhas de clientes.\n- Corrigi falhas de layout reportadas pelo atendimento."
+        }
+      ],
+      "formacao": [
+        {
+          "instituicao": "Universidade Exemplo",
+          "curso": "Ciencia da Computacao",
+          "inicioMes": 2,
+          "inicioAno": 2017,
+          "fimMes": 12,
+          "fimAno": 2020,
+          "status": "concluido"
+        }
+      ],
+      "idiomas": [
+        "Portugues, nativo",
+        "Ingles, avancado"
+      ],
+      "skills": [
+        "Python",
+        "TypeScript",
+        "AWS",
+        "Microsserviços",
+        "pytest",
+        "Playwright"
+      ]
+    },
+    "vaga": {
+      "titulo": "Desenvolvedora Full Stack Pleno",
+      "empresa": "Empresa Vaga Oito",
+      "descricao": "Procuramos pessoa desenvolvedora full stack com Python, TypeScript e AWS, vivencia em metodologias ageis, testes automatizados e arquitetura de microsservicos. Desejavel CloudFormation."
+    },
+    "keywords": [
+      {
+        "termo": "Python",
+        "peso": 1
+      },
+      {
+        "termo": "TypeScript",
+        "peso": 0.9
+      },
+      {
+        "termo": "AWS",
+        "peso": 0.9
+      },
+      {
+        "termo": "Metodologias ágeis",
+        "peso": 0.7
+      },
+      {
+        "termo": "Testes automatizados",
+        "peso": 0.7
+      },
+      {
+        "termo": "Arquitetura de microsserviços",
+        "peso": 0.7
+      },
+      {
+        "termo": "CloudFormation",
+        "peso": 0.6
+      }
+    ],
+    "contexto": [],
+    "termosProibidos": [
+      "CloudFormation",
+      "Jest"
+    ],
+    "termosSustentados": [
+      "Metodologias ágeis",
+      "Testes automatizados",
+      "Arquitetura de microsserviços"
+    ]
   }
 ]

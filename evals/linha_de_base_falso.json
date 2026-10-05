@@ -11,6 +11,11 @@
         "valor": 0,
         "absoluto": 0
       },
+      "termos_sustentados_ausentes": {
+        "direcao": "menor",
+        "valor": 0,
+        "absoluto": 0
+      },
       "violacoes_formato": {
         "direcao": "menor",
         "valor": 0,

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from . import degradacao as deg
 from . import juiz_relacao
 from .carregador_prompts import obter as obter_prompt
-from .casamento import compactar, termo_presente
+from .casamento import compactar, sustentacao, termo_presente
 from .estrutura import (
     aplicar_orcamento,
     bullets_do_perfil,
@@ -98,7 +98,13 @@ def _bloco_keywords(req: GenerateCvRequest, fontes: dict[str, Fonte]) -> str:
         termo = keyword.termo.strip()
         if not termo:
             continue
-        ids = [f.id for f in fontes.values() if f.factual and termo_presente(termo, f.texto)]
+        ids = []
+        for fonte in fontes.values():
+            achados = sustentacao(termo, fonte.texto) if fonte.factual else ()
+            if not achados:
+                continue
+            escrito = "" if termo_presente(termo, fonte.texto) else f" (escrita na fonte como {', '.join(achados)})"
+            ids.append(f"{fonte.id}{escrito}")
         onde = f"fontes factuais: {', '.join(ids)}" if ids else "sem fonte factual, nao use"
         linhas.append(f"- {termo} (peso {keyword.peso:g}): {onde}")
     return "\n".join(linhas) or "nenhuma"

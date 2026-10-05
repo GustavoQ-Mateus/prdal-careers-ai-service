@@ -1,0 +1,21 @@
+{
+  "id": "sinonimos",
+  "versao": 2,
+  "grupos": [
+    ["JavaScript", "JS"],
+    ["TypeScript", "TS"],
+    ["PostgreSQL", "Postgres"],
+    ["Kubernetes", "k8s"],
+    ["React", "React.js", "ReactJS"],
+    ["Vue.js", "Vue", "VueJS"],
+    ["Node.js", "Node", "NodeJS"],
+    [".NET", "dotnet"],
+    ["C#", "CSharp"],
+    ["CI/CD", "CICD"],
+    ["Microsserviços", "Arquitetura de microsserviços"]
+  ],
+  "abrangentes": [
+    {"termos": ["Metodologias ágeis", "Metodologia ágil"], "especificos": ["Scrum", "Kanban"]},
+    {"termos": ["Testes automatizados", "Teste automatizado"], "especificos": ["pytest", "Vitest", "Playwright", "Jest"]}
+  ]
+}
