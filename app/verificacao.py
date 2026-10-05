@@ -2,7 +2,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .casamento import compactar, dicionario_canonico, termo_presente
+from .casamento import compactar, dicionario_canonico, termo_presente, termo_sustentado, termos_abrangentes
 from .fontes import TIPO_EXPERIENCIA, Fonte, nota_factual
 from .schemas import FraseFonte, GenerateCvRequest
 from .text import normalize
@@ -38,6 +38,7 @@ def termos_reconhecidos(req: GenerateCvRequest) -> list[str]:
     candidatos = [k.termo for k in req.keywords]
     candidatos += list(req.perfil_mestre.skills)
     candidatos += [forma for grupo in dicionario_canonico() for forma in grupo]
+    candidatos += list(termos_abrangentes())
     vistos: set[str] = set()
     termos: list[str] = []
     for termo in candidatos:
@@ -135,7 +136,7 @@ def motivo_da_rejeicao(
         if permissao and (motivo := permissao(fonte)):
             return motivo
     texto_fontes = "\n".join(fontes[fonte_id].texto for fonte_id in citadas)
-    sem_fonte = [t for t in termos if termo_presente(t, texto) and not termo_presente(t, texto_fontes)]
+    sem_fonte = [t for t in termos if termo_presente(t, texto) and not termo_sustentado(t, texto_fontes)]
     if nomes:
         sem_fonte += [
             n for n in nomes_proprios(texto)
@@ -160,6 +161,6 @@ def motivo_da_competencia(termo: str, fonte_id: str, fontes: dict[str, Fonte]) -
         return f"fonte inexistente: {fonte_id}"
     if not fonte.factual:
         return f"fonte de apoio nao sustenta fato: {fonte_id}"
-    if not termo_presente(termo, fonte.texto):
+    if not termo_sustentado(termo, fonte.texto):
         return f"termo ausente da fonte citada: {termo}"
     return None

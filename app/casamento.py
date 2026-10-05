@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-ARQUIVO_SINONIMOS = Path(__file__).resolve().parent / "taxonomia" / "sinonimos.v1.json"
+ARQUIVO_SINONIMOS = Path(__file__).resolve().parent / "taxonomia" / "sinonimos.v2.json"
 
 _ANTES = r"(?<![a-z0-9])(?<![a-z0-9]\.)"
 _DEPOIS = r"(?![a-z0-9#+$])(?!\.[a-z0-9])"
@@ -38,9 +38,30 @@ def compactar(texto: str) -> str:
 
 
 @lru_cache(maxsize=1)
+def _dados() -> dict:
+    return json.loads(ARQUIVO_SINONIMOS.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
 def _grupos() -> tuple[tuple[str, ...], ...]:
-    dados = json.loads(ARQUIVO_SINONIMOS.read_text(encoding="utf-8"))
-    return tuple(tuple(grupo) for grupo in dados["grupos"])
+    return tuple(tuple(grupo) for grupo in _dados()["grupos"])
+
+
+@lru_cache(maxsize=1)
+def _abrangentes() -> tuple[tuple[tuple[str, ...], tuple[str, ...]], ...]:
+    return tuple((tuple(item["termos"]), tuple(item["especificos"])) for item in _dados().get("abrangentes", []))
+
+
+def termos_abrangentes() -> tuple[str, ...]:
+    return tuple(termo for termos, especificos in _abrangentes() for termo in (*termos, *especificos))
+
+
+def especificos(termo: str) -> tuple[str, ...]:
+    chave = compactar(termo)
+    for termos, lista in _abrangentes():
+        if any(compactar(t) == chave for t in termos):
+            return lista
+    return ()
 
 
 def dicionario_canonico() -> tuple[tuple[str, ...], ...]:
@@ -108,3 +129,13 @@ def casar_termo(termo: str, texto: str) -> Ocorrencia | None:
 
 def termo_presente(termo: str, texto: str) -> bool:
     return casar_termo(termo, texto) is not None
+
+
+def sustentacao(termo: str, texto: str) -> tuple[str, ...]:
+    if termo_presente(termo, texto):
+        return (termo.strip(),)
+    return tuple(especifico for especifico in especificos(termo) if termo_presente(especifico, texto))
+
+
+def termo_sustentado(termo: str, texto: str) -> bool:
+    return bool(sustentacao(termo, texto))
