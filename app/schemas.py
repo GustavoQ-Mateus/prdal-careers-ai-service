@@ -215,6 +215,41 @@ class ReescritaEstruturada(CamelModel):
     reparos: list[FraseReparada] = Field(description=DESCRICAO_REPAROS)
 
 
+class VerificarGeracaoRequest(GenerateCvRequest):
+    rascunho: ReescritaEstruturada | None = None
+    estado: dict[str, Any] | None = None
+    reparos: list[FraseReparada] = []
+    chamadas_restantes: int = Field(default=0, ge=0, le=6)
+
+
+class RepararGeracaoRequest(GenerateCvRequest):
+    estado: dict[str, Any]
+    chamadas_restantes: int = Field(default=0, ge=0, le=6)
+
+
+class MontarGeracaoRequest(GenerateCvRequest):
+    estado: dict[str, Any] | None = None
+    degradacao: str | None = None
+
+
+class RascunhoGeracaoResponse(ComUso):
+    rascunho: ReescritaEstruturada
+    prompt_version: str
+    requisicoes: int = 0
+
+
+class VerificacaoGeracaoResponse(ComUso):
+    estado: dict[str, Any]
+    rejeitadas: list[dict[str, Any]]
+    juiz: str
+    requisicoes: int = 0
+
+
+class ReparoGeracaoResponse(ComUso):
+    reparos: list[FraseReparada]
+    requisicoes: int = 0
+
+
 class EstruturaCurriculo(CamelModel):
     titulo: FraseFonte | None = None
     resumo: list[FraseFonte] = []
