@@ -107,11 +107,15 @@ class DesligamentoTest(unittest.TestCase):
         self.assertTrue(desligando.is_set())
         self.assertEqual([signal.SIGTERM], chamados)
 
-    def test_dockerfile_da_prazo_ao_desligamento_gracioso(self):
-        from pathlib import Path
+    def test_entrada_da_prazo_ao_desligamento_gracioso(self):
+        import os
+        import runpy
 
-        dockerfile = (Path(observabilidade.__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
-        self.assertIn('"--timeout-graceful-shutdown", "25"', dockerfile)
+        with patch.dict(os.environ, {"AWS_LAMBDA_RUNTIME_API": ""}), patch("os.execvp") as executar:
+            runpy.run_module("app.entrada", run_name="__main__")
+        argumentos = executar.call_args.args[1]
+        self.assertEqual("uvicorn", executar.call_args.args[0])
+        self.assertEqual("25", argumentos[argumentos.index("--timeout-graceful-shutdown") + 1])
 
 
 if __name__ == "__main__":
