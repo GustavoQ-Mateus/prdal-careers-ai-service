@@ -29,6 +29,13 @@ from .generate import (
     reduzir_curriculo,
 )
 from .keywords import extract_keywords
+from .observabilidade import (
+    MENSAGEM_DESLIGAMENTO,
+    avisar_desligamento,
+    configurar_logs,
+    desligando,
+    middleware_requisicao,
+)
 from .prontidao import prontidao
 from . import telemetria
 from .degradacao import Degradacao
@@ -80,6 +87,7 @@ from .score import calcular_score
 DOC_SERVICE_URL = os.getenv("DOC_SERVICE_URL", "http://localhost:8080")
 HEADER_PRAZO = "X-Prdal-Prazo-Ms"
 HEADER_OPERACAO = "X-Prdal-Operacao"
+ESPERA_DA_FILA_S = 0.25
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +103,8 @@ def _aquecer_embeddings() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    configurar_logs()
+    avisar_desligamento()
     exigir_token_no_boot()
     exigir_modelo_no_boot()
     telemetria.configurar()
@@ -107,6 +117,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="ai-service", lifespan=lifespan, **rotas_de_documentacao())
 app.middleware("http")(exigir_servico)
+app.middleware("http")(middleware_requisicao)
 
 
 @app.exception_handler(PrazoEsgotado)
@@ -305,6 +316,18 @@ def _erro_do_stream(detalhe: str, op: Operacao | None, emitiu: bool) -> str:
     )
 
 
+def _pendentes(fila: "queue.Queue[str | None]") -> list[str]:
+    linhas: list[str] = []
+    while True:
+        try:
+            linha = fila.get_nowait()
+        except queue.Empty:
+            return linhas
+        if linha is None:
+            return linhas
+        linhas.append(linha)
+
+
 @app.post("/copiloto/turn/stream")
 def copiloto_turn_stream(req: TurnRequest, request: Request) -> StreamingResponse:
     prazo_ms = _prazo_ms(request.headers.get(HEADER_PRAZO))
@@ -347,8 +370,23 @@ def copiloto_turn_stream(req: TurnRequest, request: Request) -> StreamingRespons
     threading.Thread(target=contextvars.copy_context().run, args=(trabalhar,), daemon=True).start()
 
     def corpo():
+        emitiu = False
         try:
-            while (linha := fila.get()) is not None:
+            while True:
+                if desligando.is_set():
+                    for pendente in _pendentes(fila):
+                        emitiu = emitiu or '"tipo": "delta"' in pendente
+                        yield pendente
+                    logger.warning("turno em stream encerrado pelo desligamento do servico")
+                    yield _erro_do_stream(MENSAGEM_DESLIGAMENTO, None, emitiu)
+                    return
+                try:
+                    linha = fila.get(timeout=ESPERA_DA_FILA_S)
+                except queue.Empty:
+                    continue
+                if linha is None:
+                    return
+                emitiu = emitiu or '"tipo": "delta"' in linha
                 yield linha
         finally:
             cancelado.set()
