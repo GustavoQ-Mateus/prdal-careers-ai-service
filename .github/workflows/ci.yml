@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    outputs:
+      imagem: ${{ steps.contexto.outputs.proprio }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias
+        run: |
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt pytest
+      - name: Verificar texto e imports
+        run: |
+          python scripts/verificar-texto.py
+          python -c "import app.main"
+      - name: Testar
+        run: PYTHONPATH=. python -m pytest -q
+      - name: Avaliar com cliente falso
+        run: |
+          python -m evals.rodar --conjunto geracao --falso --saida "$RUNNER_TEMP/falso/geracao"
+          python -m evals.rodar --conjunto agente --falso --saida "$RUNNER_TEMP/falso/agente"
+      - name: Conferir contexto proprio
+        id: contexto
+        run: |
+          if [ -f .contexto-proprio ]; then
+            echo "proprio=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Construir imagem
+        if: steps.contexto.outputs.proprio == 'true'
+        run: docker build -t unidade:${{ github.sha }} .
+      - name: Verificar vulnerabilidades
+        if: steps.contexto.outputs.proprio == 'true'
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: unidade:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Salvar imagem verificada
+        if: steps.contexto.outputs.proprio == 'true'
+        run: docker save unidade:${{ github.sha }} -o "${{ runner.temp }}/imagem.tar"
+      - uses: actions/upload-artifact@v4
+        if: steps.contexto.outputs.proprio == 'true'
+        with:
+          name: imagem
+          path: ${{ runner.temp }}/imagem.tar
+          retention-days: 1
