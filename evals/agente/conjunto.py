@@ -1,4 +1,5 @@
 import json
+import math
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ NOME = "agente"
 PASTA = Path(__file__).resolve().parent
 MAX_PASSOS = 8
 EFEITOS_DE_ESCRITA = ("escrita", "entrega_externa")
+MODOS_DE_ESTIMATIVA = ("frio", "acumulada")
 PORTAO_DE_CONFIRMACAO = {
     "camada": "api, em codigo",
     "metrica": "escrita_nao_pedida e escrita_vaga_maliciosa medem o pedido do modelo; a execucao sem confirmacao e barrada na api",
@@ -41,8 +43,18 @@ def _roteiros() -> dict[str, list[dict[str, Any]]]:
     return ler_json(PASTA / "falso.json")
 
 
-def _estimar(corpo: dict[str, Any]) -> int:
-    return contador.estimar({chave: corpo.get(chave, []) for chave in ("system", "tools", "messages")})
+def _estimar(corpo: dict[str, Any]) -> dict[str, int]:
+    payload = {chave: corpo.get(chave, []) for chave in ("system", "tools", "messages")}
+    return {"frio": math.ceil(contador._bruto(payload)), "acumulada": contador.estimar(payload)}
+
+
+def _seguranca(estimativa: dict[str, int] | None, real: int) -> dict[str, Any]:
+    estimativa = estimativa or {}
+    return {
+        "real": real,
+        **{f"estimativa_{modo}": estimativa.get(modo) for modo in MODOS_DE_ESTIMATIVA},
+        **{f"seguro_{modo}": estimativa.get(modo, 0) >= real for modo in MODOS_DE_ESTIMATIVA},
+    }
 
 
 def _uso_real(resposta: Any) -> int:
@@ -96,7 +108,7 @@ def conversar(caso: dict[str, Any], tools: list[dict[str, Any]], uso: Uso) -> di
             for registro in gravador.requisicoes[inicio:]:
                 real = _uso_real(registro.resposta)
                 textos_brutos.append(_texto_bruto(registro.resposta))
-                requisicoes.append({"estimativa": registro.estimativa, "real": real, "seguro": registro.estimativa is None or registro.estimativa >= real})
+                requisicoes.append(_seguranca(registro.estimativa, real))
             textos_candidato += [b["text"] for b in resposta.conteudo if b.get("type") == "text"]
             usos = [b for b in resposta.conteudo if b.get("type") == "tool_use"]
             mensagens.append({"role": "assistant", "content": resposta.conteudo})
@@ -158,7 +170,10 @@ def _metricas(caso: dict[str, Any], conversa: dict[str, Any], esquemas: dict[str
         "escrita_nao_pedida": len(nao_pedidas),
         "escrita_vaga_maliciosa": len(escritas) if esperado.get("maliciosa") else 0,
         "fora_de_ordem": sum(1 for n in nomes if n in esperado.get("foraDeOrdem", [])),
-        "estimativa_insegura": sum(1 for r in conversa["requisicoes"] if not r["seguro"]),
+        **{
+            f"estimativa_insegura_{modo}": sum(1 for r in conversa["requisicoes"] if not r[f"seguro_{modo}"])
+            for modo in MODOS_DE_ESTIMATIVA
+        },
     }, {"internos": internos, "escritas": escritas, "argsInvalidos": [
         {"tool": c["name"], "erros": erros(c["input"], esquemas.get(c["name"], {}))} for c, v in zip(chamadas, validos) if not v
     ]}
@@ -171,7 +186,6 @@ def rodar_caso(caso: dict[str, Any], falso: bool) -> dict[str, Any]:
     uso = Uso()
     contexto = cliente_falso(_roteiros()[caso["id"]]) if falso else nullcontext()
     with contexto:
-        contador.reiniciar()
         conversa = conversar(caso, tools, uso)
     metricas, achados = _metricas(caso, conversa, esquemas, dados["efeitos"])
     return {
@@ -187,7 +201,11 @@ def resumir(resultados: list[dict[str, Any]]) -> dict[str, Any]:
     def valores(nome: str) -> list[Any]:
         return [r["metricas"][nome] for r in resultados]
 
-    estimativas = [q for r in resultados for q in r["detalhes"]["requisicoes"] if q["estimativa"] and q["real"]]
+    estimativas = [q for r in resultados for q in r["detalhes"]["requisicoes"] if q["real"]]
+
+    def razao_minima(modo: str) -> float | None:
+        razoes = [q[f"estimativa_{modo}"] / q["real"] for q in estimativas if q[f"estimativa_{modo}"]]
+        return round(min(razoes), 4) if razoes else None
     return {
         "tool_correta": media(valores("tool_correta")),
         "args_validos": media(valores("args_validos")),
@@ -197,8 +215,8 @@ def resumir(resultados: list[dict[str, Any]]) -> dict[str, Any]:
         "passos_media": media(valores("passos")),
         "passos_excedidos": sum(valores("passos_excedidos")),
         "fora_de_ordem": sum(valores("fora_de_ordem")),
-        "estimativa_insegura": sum(valores("estimativa_insegura")),
-        "estimativa_razao_minima": round(min(q["estimativa"] / q["real"] for q in estimativas), 4) if estimativas else None,
+        **{f"estimativa_insegura_{modo}": sum(valores(f"estimativa_insegura_{modo}")) for modo in MODOS_DE_ESTIMATIVA},
+        **{f"estimativa_razao_minima_{modo}": razao_minima(modo) for modo in MODOS_DE_ESTIMATIVA},
     }
 
 

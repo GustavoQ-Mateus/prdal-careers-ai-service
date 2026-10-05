@@ -15,8 +15,9 @@ MARCA_DADO = "dado_nao_confiavel"
 ORCAMENTO_PADRAO = 30000
 FRACAO_ALVO = 0.6
 FRACAO_LOTE_RESUMO = 0.5
-CARACTERES_POR_TOKEN_PADRAO = 3.0
+CARACTERES_POR_TOKEN_PADRAO = 1.8
 CARACTERES_RESERVADOS_AO_RESUMO = 1500
+MARGEM_DO_CORTE = 200
 ESFORCO_RESUMO = "low"
 MAX_TOKENS_RESUMO = 1500
 TIMEOUT_CONTAGEM_S = 10.0
@@ -309,16 +310,18 @@ def _encolher_ultima_troca(
 ) -> dict[str, Any]:
     compactada = compactar(ultima, nomes, preservar_ultimo=True)
     payload = _payload(system, tools, [_prefixo(req, resumo), *compactada])
-    if contador.contar(payload) <= orcamento:
+    contado = contador.contar(payload)
+    if contado <= orcamento:
         return payload
-    excesso = contador.contar(payload) - orcamento
+    excesso = contado - orcamento
+    caracteres_por_token = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":"))) / contado
     for mensagem in reversed(payload["messages"]):
         resultados = [bloco for bloco in mensagem["content"] if bloco.get("type") == "tool_result"]
         if not resultados:
             continue
         bloco = resultados[-1]
         conteudo = bloco["content"]
-        corte = math.ceil(excesso * _caracteres_por_token() * contador.fator * 1.2) + 200
+        corte = math.ceil(excesso * caracteres_por_token) + MARGEM_DO_CORTE
         if corte >= len(conteudo):
             break
         manter = len(conteudo) - corte

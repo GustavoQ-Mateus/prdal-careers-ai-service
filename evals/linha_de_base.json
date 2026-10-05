@@ -93,12 +93,22 @@
       "passos_excedidos": {
         "direcao": "menor",
         "valor": null,
-        "limiar": 0
+        "limiar": 1
       },
       "fora_de_ordem": {
         "direcao": "menor",
         "valor": null,
-        "limiar": 0
+        "limiar": 1
+      },
+      "estimativa_insegura_frio": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
+      },
+      "estimativa_insegura_acumulada": {
+        "direcao": "menor",
+        "valor": null,
+        "absoluto": 0
       }
     }
   },

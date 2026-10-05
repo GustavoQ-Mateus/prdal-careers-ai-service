@@ -95,12 +95,22 @@
       "passos_excedidos": {
         "direcao": "menor",
         "valor": 0,
-        "limiar": 0
+        "limiar": 1
       },
       "fora_de_ordem": {
         "direcao": "menor",
         "valor": 0,
-        "limiar": 0
+        "limiar": 1
+      },
+      "estimativa_insegura_frio": {
+        "direcao": "menor",
+        "valor": 0,
+        "absoluto": 0
+      },
+      "estimativa_insegura_acumulada": {
+        "direcao": "menor",
+        "valor": 0,
+        "absoluto": 0
       }
     },
     "gravadaEm": "2026-10-04",

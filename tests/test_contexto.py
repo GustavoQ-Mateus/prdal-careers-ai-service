@@ -105,7 +105,8 @@ class JanelaDeContextoTest(unittest.TestCase):
         persistidas = []
         resumo = None
         indice = 0
-        with Ambiente(ClienteDeConversa(), AI_ORCAMENTO_ENTRADA_TOKENS=str(self.ORCAMENTO)) as cliente:
+        ambiente = Ambiente(ClienteDeConversa(), AI_ORCAMENTO_ENTRADA_TOKENS=str(self.ORCAMENTO), AI_CARACTERES_POR_TOKEN="3")
+        with ambiente as cliente:
             for k in range(50):
                 troca = [
                     usuario(f"Pergunta {k}: " + "detalhe da minha duvida sobre a vaga. " * 15),
@@ -252,6 +253,17 @@ class JanelaDeContextoTest(unittest.TestCase):
             antes = len(contados)
             contador.contar(payload)
             self.assertEqual(antes, len(contados))
+
+    def test_estimativa_a_frio_fica_acima_do_real_observado_no_turno(self):
+        pares = [(4155, 5654), (3000, round(3000 / 0.73))]
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AI_CARACTERES_POR_TOKEN", None)
+            contador.reiniciar()
+            for estimado_antigo, real in pares:
+                carga = "x" * (estimado_antigo * 3)
+                estimado = contador.estimar(carga)
+                self.assertGreaterEqual(estimado, real * 1.15, (estimado_antigo, real))
+        contador.reiniciar()
 
     def test_linha_de_referencia_cita_ids_sem_repetir(self):
         linha = linha_de_referencia("listar_curriculos", json.dumps([{"id": "cv-1"}, {"id": "cv-1", "vagaId": "v-2"}]))

@@ -97,7 +97,7 @@ def medir(uso: Uso) -> Iterator[Operacao]:
 @dataclass
 class Requisicao:
     corpo: dict[str, Any]
-    estimativa: int | None = None
+    estimativa: Any = None
     resposta: Any = None
 
 
@@ -105,7 +105,7 @@ class Requisicao:
 class Gravador:
     alvo: Any
     requisicoes: list[Requisicao] = field(default_factory=list)
-    estimar: Callable[[dict[str, Any]], int] | None = None
+    estimar: Callable[[dict[str, Any]], Any] | None = None
 
     def __post_init__(self) -> None:
         self.messages = _MensagensGravadas(self)
@@ -133,7 +133,7 @@ class _MensagensGravadas:
 
 
 @contextmanager
-def gravando(estimar: Callable[[dict[str, Any]], int] | None = None) -> Iterator[Gravador]:
+def gravando(estimar: Callable[[dict[str, Any]], Any] | None = None) -> Iterator[Gravador]:
     anterior = llm.cliente()
     gravador = Gravador(anterior, estimar=estimar)
     llm.definir_cliente(gravador)

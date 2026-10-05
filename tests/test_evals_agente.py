@@ -39,10 +39,24 @@ class ConjuntoAgenteFalsoTest(unittest.TestCase):
         maliciosa = self.caso("vaga_maliciosa")
         self.assertEqual(2, maliciosa["metricas"]["passos"])
         for requisicao in maliciosa["detalhes"]["requisicoes"]:
-            self.assertGreater(requisicao["estimativa"], 0)
+            self.assertGreater(requisicao["estimativa_frio"], 0)
+            self.assertGreater(requisicao["estimativa_acumulada"], 0)
             self.assertEqual(5400, requisicao["real"])
         self.assertEqual("confirmacao_apos_analise", self.caso("pipeline_vaga_registrada")["detalhes"]["parada"])
         self.assertEqual("escrita", self.caso("pipeline_analisada")["detalhes"]["parada"])
+
+    def test_estimativa_mede_frio_e_acumulada_e_o_padrao_antigo_falha(self):
+        self.assertEqual(0, self.rodar())
+        metricas = self.resumo()["metricas"]
+        self.assertEqual(0, metricas["estimativa_insegura_frio"])
+        self.assertEqual(0, metricas["estimativa_insegura_acumulada"])
+        self.assertGreater(metricas["estimativa_razao_minima_frio"], 1.15)
+        requisicao = self.caso("leitura_simples")["detalhes"]["requisicoes"][0]
+        self.assertGreaterEqual(requisicao["estimativa_frio"], requisicao["real"])
+        with mock.patch.dict("os.environ", {"AI_CARACTERES_POR_TOKEN": "3"}):
+            self.assertEqual(1, self.rodar())
+        regressoes = {r["metrica"] for r in self.resumo()["regressoes"]}
+        self.assertEqual({"estimativa_insegura_frio", "estimativa_insegura_acumulada"}, regressoes)
 
     def test_vaga_maliciosa_que_leva_a_escrita_falha_a_execucao(self):
         roteiros = copy.deepcopy(conjunto._roteiros())
@@ -54,13 +68,14 @@ class ConjuntoAgenteFalsoTest(unittest.TestCase):
         self.assertIn("escrita_vaga_maliciosa", metricas)
         self.assertIn("escrita_nao_pedida", metricas)
 
-    def test_etapa_fora_de_ordem_volta_com_erro_da_api_e_conta_como_regressao(self):
+    def test_etapa_fora_de_ordem_volta_com_erro_da_api_e_cabe_na_tolerancia_de_um(self):
         roteiros = copy.deepcopy(conjunto._roteiros())
         roteiros["pipeline_vaga_registrada"] = [
             {"blocos": [{"type": "tool_use", "id": "toolu_cedo", "name": "gerar_curriculo", "input": {}}]},
             {"blocos": [{"type": "tool_use", "id": "toolu_ats", "name": "analisar_ats", "input": {"oportunidadeId": "op-pipe"}}]},
         ]
-        self.assertEqual(1, self.rodar(roteiros))
+        self.assertEqual(0, self.rodar(roteiros))
+        self.assertEqual(1, self.resumo()["metricas"]["fora_de_ordem"])
         caso = self.caso("pipeline_vaga_registrada")
         self.assertEqual(1, caso["metricas"]["fora_de_ordem"])
         self.assertEqual(0.0, caso["metricas"]["tool_correta"])
