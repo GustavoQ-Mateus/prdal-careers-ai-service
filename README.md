@@ -26,6 +26,10 @@ O contexto é somente esta pasta. A imagem final executa sem root e não inclui 
 
 ## Variáveis de ambiente
 
+Na Lambda, defina `ANTHROPIC_API_KEY_SECRET_ARN` e permita `secretsmanager:GetSecretValue` somente nesse segredo (e `kms:Decrypt` na chave, se usar chave KMS própria). O `SecretString` deve conter a chave como texto puro. Se `ANTHROPIC_API_KEY` estiver ausente ou vazia, o serviço consulta o segredo uma vez na inicialização e preenche essa variável no processo. Uma chave já definida tem prioridade e evita a consulta; ECS e compose continuam recebendo a chave pelo ambiente. Falha na leitura preserva o erro `ANTHROPIC_API_KEY ausente`, sem registrar o valor ou a mensagem da exceção do SDK.
+
+O ai-service não usa SnapStart. Se ele for habilitado futuramente, o segredo lido na inicialização entrará no snapshot. A chave permanece em memória durante a vida do processo; a rotação requer nova inicialização e, com SnapStart, novo snapshot.
+
 Use `.env.example` como referência, sem versionar segredos. As variáveis opcionais usam os padrões definidos no código; configure explicitamente os destinos de banco e serviços no seu ambiente.
 
-`AI_CARACTERES_POR_TOKEN`, `AI_CONTAGEM_TOKENS`, `AI_JUIZ_RELACAO`, `AI_MAX_RETRIES`, `AI_MAX_TOKENS`, `AI_MODEL`, `AI_ORCAMENTO_ENTRADA_TOKENS`, `AI_TIMEOUT_PISO_S`, `AI_TIMEOUT_TETO_S`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `AWS_LAMBDA_RUNTIME_API`, `DOC_SERVICE_URL`, `EMBED_DIMENSAO`, `EMBED_MODEL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `PRDAL_AMBIENTE`, `SERVICE_TOKEN`.
+`AI_CARACTERES_POR_TOKEN`, `AI_CONTAGEM_TOKENS`, `AI_JUIZ_RELACAO`, `AI_MAX_RETRIES`, `AI_MAX_TOKENS`, `AI_MODEL`, `AI_ORCAMENTO_ENTRADA_TOKENS`, `AI_TIMEOUT_PISO_S`, `AI_TIMEOUT_TETO_S`, `ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEY_SECRET_ARN`, `ANTHROPIC_AUTH_TOKEN`, `AWS_LAMBDA_RUNTIME_API`, `DOC_SERVICE_URL`, `EMBED_DIMENSAO`, `EMBED_MODEL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `PRDAL_AMBIENTE`, `SERVICE_TOKEN`.

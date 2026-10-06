@@ -15,6 +15,9 @@ from pydantic import BaseModel, ValidationError
 
 from . import telemetria
 from .seguranca import em_desenvolvimento
+from .segredos import carregar_chave
+
+carregar_chave()
 
 T = TypeVar("T", bound=BaseModel)
 
