@@ -4,6 +4,7 @@ uvicorn[standard]==0.34.0
 httpx==0.28.1
 pydantic==2.10.4
 anthropic==1.11.0
+boto3==1.43.61
 opentelemetry-api==1.45.0
 opentelemetry-sdk==1.45.0
 opentelemetry-exporter-otlp-proto-http==1.45.0
